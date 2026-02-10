@@ -487,6 +487,61 @@
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
 
+  /* ─── Fundraiser ─── */
+  .fundraiser-stats {
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 6px;
+  }
+  .fund-stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+  }
+  .fund-stat-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+  .fund-stat-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .fund-highlight {
+    color: var(--accent);
+    font-size: 15px;
+  }
+  .fund-raised {
+    font-size: 18px;
+  }
+  .fund-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 8px 0;
+  }
+  .fund-progress-bar {
+    width: 100%;
+    height: 8px;
+    background: var(--bg-input);
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 6px 0 4px;
+  }
+  .fund-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), #00ffb3);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+  }
+  .fund-progress-fill.complete {
+    background: linear-gradient(90deg, #ffaa22, #ffdd00);
+    box-shadow: 0 0 8px #ffaa22;
+  }
+
   /* ─── Responsive ─── */
   @media (max-width: 1100px) {
     .app-layout { flex-direction: column; }
@@ -752,6 +807,62 @@
           <span class="layer-name">Draw Layer</span>
           <div class="layer-actions">
             <div class="layer-vis" onclick="toggleLayerVis('draw',this)">👁</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FUNDRAISER -->
+    <div class="panel">
+      <div class="panel-header" onclick="togglePanel(this)">
+        <span class="panel-title">💰 Fundraiser</span>
+        <span class="panel-toggle">▼</span>
+      </div>
+      <div class="panel-body">
+        <label class="checkbox-row">
+          <input type="checkbox" id="fundraiserEnabled" onchange="toggleFundraiser()"> Enable Fundraiser Mode
+        </label>
+        <div id="fundraiserControls" style="display:none">
+          <div>
+            <label class="ctrl-label">Fundraising Goal ($)</label>
+            <input type="number" id="fundraiserGoal" value="1000" min="1" step="1" style="width:100%" onchange="updateFundraiser()" oninput="updateFundraiser()">
+          </div>
+          <div>
+            <label class="ctrl-label">Count Pixels From</label>
+            <select id="fundraiserSource" onchange="updateFundraiser()">
+              <option value="draw">Draw Layer Only</option>
+              <option value="all" selected>All Visible Layers</option>
+            </select>
+          </div>
+          <div class="fundraiser-stats">
+            <div class="fund-stat-row">
+              <span class="fund-stat-label">Total Pixels</span>
+              <span class="fund-stat-value" id="fundTotalPixels">1,058</span>
+            </div>
+            <div class="fund-stat-row">
+              <span class="fund-stat-label">Value Per Peg</span>
+              <span class="fund-stat-value fund-highlight" id="fundPegValue">$0.95</span>
+            </div>
+            <div class="fund-divider"></div>
+            <div class="fund-stat-row">
+              <span class="fund-stat-label">Pegs Placed</span>
+              <span class="fund-stat-value" id="fundPegsPlaced">0</span>
+            </div>
+            <div class="fund-stat-row">
+              <span class="fund-stat-label">Amount Raised</span>
+              <span class="fund-stat-value fund-highlight fund-raised" id="fundAmountRaised">$0.00</span>
+            </div>
+            <div class="fund-stat-row">
+              <span class="fund-stat-label">Progress</span>
+              <span class="fund-stat-value" id="fundProgress">0%</span>
+            </div>
+            <div class="fund-progress-bar">
+              <div class="fund-progress-fill" id="fundProgressFill" style="width:0%"></div>
+            </div>
+            <div class="fund-stat-row">
+              <span class="fund-stat-label">Remaining</span>
+              <span class="fund-stat-value" id="fundRemaining">$1,000.00</span>
+            </div>
           </div>
         </div>
       </div>
@@ -1269,6 +1380,9 @@ function render() {
       }
     }
   }
+
+  // Update fundraiser stats if active
+  if (fundraiserActive) updateFundraiser();
 }
 
 // ═══════════════════════════════════════════
@@ -1640,6 +1754,58 @@ function clearMatrix() {
 document.getElementById('vuColorMode').addEventListener('change', function() {
   document.getElementById('vuCustomColors').style.display = this.value === 'custom' ? '' : 'none';
 });
+
+// ═══════════════════════════════════════════
+// FUNDRAISER
+// ═══════════════════════════════════════════
+let fundraiserActive = false;
+
+function toggleFundraiser() {
+  fundraiserActive = document.getElementById('fundraiserEnabled').checked;
+  document.getElementById('fundraiserControls').style.display = fundraiserActive ? '' : 'none';
+  if (fundraiserActive) updateFundraiser();
+}
+
+function countLitPixels() {
+  const source = document.getElementById('fundraiserSource').value;
+  let count = 0;
+
+  if (source === 'draw') {
+    // Count only draw layer pixels
+    for (let r = 0; r < ROWS; r++)
+      for (let c = 0; c < COLS; c++)
+        if (layers.draw.data[r][c]) count++;
+  } else {
+    // Count all lit pixels on screen (any LED that is on)
+    for (let r = 0; r < ROWS; r++)
+      for (let c = 0; c < COLS; c++)
+        if (leds[r][c].classList.contains('on')) count++;
+  }
+  return count;
+}
+
+function updateFundraiser() {
+  if (!fundraiserActive) return;
+
+  const goal = parseFloat(document.getElementById('fundraiserGoal').value) || 0;
+  const totalPixels = ROWS * COLS;
+  const pegValue = goal > 0 ? goal / totalPixels : 0;
+  const pegsPlaced = countLitPixels();
+  const raised = pegsPlaced * pegValue;
+  const progress = goal > 0 ? Math.min(100, (raised / goal) * 100) : 0;
+  const remaining = Math.max(0, goal - raised);
+
+  document.getElementById('fundTotalPixels').textContent = totalPixels.toLocaleString();
+  document.getElementById('fundPegValue').textContent = '$' + pegValue.toFixed(2);
+  document.getElementById('fundPegsPlaced').textContent = pegsPlaced.toLocaleString();
+  document.getElementById('fundAmountRaised').textContent = '$' + raised.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  document.getElementById('fundProgress').textContent = progress.toFixed(1) + '%';
+  document.getElementById('fundRemaining').textContent = '$' + remaining.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+  const fill = document.getElementById('fundProgressFill');
+  fill.style.width = progress + '%';
+  fill.classList.toggle('complete', progress >= 100);
+}
 
 // ═══════════════════════════════════════════
 // EXPORT
