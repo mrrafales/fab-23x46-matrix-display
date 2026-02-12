@@ -302,7 +302,6 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
     padding: 24px;
     background:
       radial-gradient(ellipse at 50% 30%, #151a2808, transparent 70%),
@@ -312,6 +311,15 @@
   }
 
   /* ─── Matrix ─── */
+  .matrix-scroll-area {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    overflow: auto;
+    min-height: 0;
+  }
   .matrix-wrapper {
     background: #080a0e;
     border-radius: 12px;
@@ -321,6 +329,8 @@
       0 4px 24px rgba(0,0,0,0.6),
       inset 0 1px 0 rgba(255,255,255,0.03);
     position: relative;
+    transform-origin: center center;
+    margin: auto;
   }
   .matrix-frame-label {
     position: absolute;
@@ -359,8 +369,16 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: 14px;
+    padding: 10px 16px;
+    margin-bottom: 0;
     flex-wrap: wrap;
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg-dark);
+    border-bottom: 1px solid var(--border);
+    width: 100%;
   }
   .toolbar-sep {
     width: 1px;
@@ -710,8 +728,12 @@
           </select>
         </div>
         <label class="checkbox-row">
-          <input type="checkbox" id="textScroll"> Scroll Text
+          <input type="checkbox" id="textScroll" onchange="document.getElementById('textScrollSpeedWrap').style.display=this.checked?'':'none'"> Scroll Text
         </label>
+        <div id="textScrollSpeedWrap" style="display:none">
+          <label class="ctrl-label">Scroll Speed: <span id="textScrollSpeedVal">Medium</span></label>
+          <input type="range" min="1" max="5" value="3" id="textScrollSpeed" oninput="document.getElementById('textScrollSpeedVal').textContent=['Slow','Slow-Med','Medium','Med-Fast','Fast'][this.value-1]">
+        </div>
         <button class="btn" onclick="addTextLayer()" style="width:100%">+ Add Text Layer</button>
       </div>
     </div>
@@ -738,10 +760,6 @@
           </div>
         </div>
         <div>
-          <label class="ctrl-label">Bars</label>
-          <input type="number" id="vuBars" value="8" min="1" max="23" style="width:100%">
-        </div>
-        <div>
           <label class="ctrl-label">Color Mode</label>
           <select id="vuColorMode">
             <option value="classic">Classic (Green→Red)</option>
@@ -764,7 +782,7 @@
             </div>
           </div>
         </div>
-        <div>
+        <div id="vuMonoColorWrap" style="display:none">
           <label class="ctrl-label">Mono Color</label>
           <input type="color" id="vuMonoColor" value="#00e5a0">
         </div>
@@ -808,9 +826,6 @@
             <label class="ctrl-label">Step Size: <span id="vuStepVal">5%</span></label>
             <input type="range" min="1" max="25" value="5" id="vuStepSize" oninput="document.getElementById('vuStepVal').textContent=this.value+'%'">
           </div>
-          <label class="checkbox-row" style="margin-top:4px">
-            <input type="checkbox" id="vuUniformBars" checked> All bars same level
-          </label>
         </div>
         <button class="btn" onclick="addVuLayer()" style="width:100%">+ Add VU Meter Layer</button>
       </div>
@@ -948,11 +963,16 @@
       <button class="btn btn-sm" onclick="zoomIn()">+</button>
       <button class="btn btn-sm" onclick="zoomOut()">−</button>
       <span class="dim" id="zoomLevel" style="font-family:'JetBrains Mono';font-size:11px;">100%</span>
+      <div class="toolbar-sep"></div>
+      <button class="btn btn-sm" onclick="liteBriteBackground()" title="Fill all pixels white">💡 White BG</button>
+      <button class="btn btn-sm" onclick="clearMatrix()" title="Clear all layers">✕ Clear All</button>
     </div>
 
-    <div class="matrix-wrapper" id="matrixWrapper">
-      <div class="matrix-grid" id="matrixGrid"></div>
-      <div class="matrix-frame-label">23 ROWS × 46 COLS &nbsp;·&nbsp; 1058 LEDs</div>
+    <div class="matrix-scroll-area">
+      <div class="matrix-wrapper" id="matrixWrapper">
+        <div class="matrix-grid" id="matrixGrid"></div>
+        <div class="matrix-frame-label">23 ROWS × 46 COLS &nbsp;·&nbsp; 1058 LEDs</div>
+      </div>
     </div>
   </div>
 </div>
@@ -1461,9 +1481,9 @@ function startAnimLoop() {
 function addVuLayer() {
   const id = 'vu_' + (++layerIdCounter);
   const isStatic = vuMode === 'static';
-  const bars = parseInt(document.getElementById('vuBars').value);
+  const bars = 1;
   const initialLevel = isStatic ? parseInt(document.getElementById('vuStaticLevel').value) / 100 : 0;
-  const uniformBars = isStatic ? document.getElementById('vuUniformBars').checked : false;
+  const uniformBars = true;
   const stepSize = isStatic ? parseInt(document.getElementById('vuStepSize').value) / 100 : 0.05;
 
   const layer = {
@@ -1512,7 +1532,7 @@ function addTextLayer() {
     y: parseInt(document.getElementById('textY').value),
     size: document.getElementById('textSize').value,
     scroll: document.getElementById('textScroll').checked,
-    scrollSpeed: 1,
+    scrollSpeed: [0.5, 0.75, 1, 1.5, 2.5][parseInt(document.getElementById('textScrollSpeed').value) - 1],
   };
   dynamicLayers.push(layer);
   addLayerUI(layer, '✎', `"${layer.text.substring(0,10)}"`);
@@ -1810,11 +1830,19 @@ function clearMatrix() {
   if (fundraiserActive) rebuildFundLayerList();
 }
 
+function liteBriteBackground() {
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      layers.draw.data[r][c] = 'rgb(255,255,255)';
+  render();
+}
+
 // ═══════════════════════════════════════════
 // VU COLOR MODE SWITCH
 // ═══════════════════════════════════════════
 document.getElementById('vuColorMode').addEventListener('change', function() {
   document.getElementById('vuCustomColors').style.display = this.value === 'custom' ? '' : 'none';
+  document.getElementById('vuMonoColorWrap').style.display = this.value === 'mono' ? '' : 'none';
 });
 
 // ═══════════════════════════════════════════
