@@ -612,6 +612,29 @@
     padding: 4px 0;
   }
 
+  /* ─── Text Layer Inline Controls ─── */
+  .layer-text-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    margin-top: 6px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+  .layer-text-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .layer-text-row input[type="range"] {
+    flex: 1;
+    height: 3px;
+  }
+  .layer-text-row input[type="color"] {
+    flex-shrink: 0;
+  }
+
   /* ─── Responsive ─── */
   @media (max-width: 1100px) {
     .app-layout { flex-direction: column; }
@@ -1665,6 +1688,31 @@ function addLayerUI(layer, icon, name) {
     }
   }
 
+  if (layer.type === 'text') {
+    const speedIdx = [0.5, 0.75, 1, 1.5, 2.5].indexOf(layer.scrollSpeed);
+    const speedVal = speedIdx >= 0 ? speedIdx + 1 : 3;
+    const speedLabel = ['Slow','Slow-Med','Medium','Med-Fast','Fast'][speedVal - 1];
+    controlsHTML = `
+      <div class="layer-text-controls">
+        <div class="layer-text-row">
+          <span class="ctrl-label" style="margin:0;white-space:nowrap">Color</span>
+          <input type="color" value="${layer.color}" onchange="updateTextLayerProp('${layer.id}','color',this.value)" style="width:32px;height:26px">
+        </div>
+        <div class="layer-text-row">
+          <label class="checkbox-row" style="font-size:11px">
+            <input type="checkbox" ${layer.scroll ? 'checked' : ''} onchange="updateTextLayerProp('${layer.id}','scroll',this.checked); this.closest('.layer-text-controls').querySelector('.layer-text-speed').style.display=this.checked?'':'none'"> Scroll
+          </label>
+        </div>
+        <div class="layer-text-row layer-text-speed" style="display:${layer.scroll ? '' : 'none'}">
+          <span class="ctrl-label" style="margin:0;white-space:nowrap;min-width:42px">Speed</span>
+          <input type="range" min="1" max="5" value="${speedVal}"
+            oninput="updateTextScrollSpeed('${layer.id}',this.value); this.nextElementSibling.textContent=['Slow','S-M','Med','M-F','Fast'][this.value-1]"
+            style="flex:1">
+          <span class="ctrl-label" style="margin:0;min-width:28px;text-align:right">${speedLabel.substring(0,3)}</span>
+        </div>
+      </div>`;
+  }
+
   el.innerHTML = `
     <span class="layer-icon">${icon}</span>
     <span class="layer-name">${name}</span>
@@ -1697,6 +1745,21 @@ function removeDynLayer(id) {
   if (el) el.remove();
   render();
   if (fundraiserActive) rebuildFundLayerList();
+}
+
+function updateTextLayerProp(layerId, prop, value) {
+  const layer = dynamicLayers.find(l => l.id === layerId);
+  if (!layer || layer.type !== 'text') return;
+  layer[prop] = value;
+  if (prop === 'scroll' && value) startAnimLoop();
+  render();
+}
+
+function updateTextScrollSpeed(layerId, sliderVal) {
+  const layer = dynamicLayers.find(l => l.id === layerId);
+  if (!layer || layer.type !== 'text') return;
+  layer.scrollSpeed = [0.5, 0.75, 1, 1.5, 2.5][parseInt(sliderVal) - 1];
+  render();
 }
 
 // ═══════════════════════════════════════════
