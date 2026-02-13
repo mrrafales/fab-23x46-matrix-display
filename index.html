@@ -784,12 +784,6 @@
             <input type="color" id="textColor" value="#ff4466">
           </div>
         </div>
-        <button class="btn place-btn" id="textPlaceBtn" onclick="startPlacement('text')" style="width:100%">📍 Place on Matrix</button>
-        <div class="place-readout" id="textPlaceReadout">
-          Col (X): <span id="textXVal">1</span> &nbsp;·&nbsp; Row (Y): <span id="textYVal">1</span>
-        </div>
-        <input type="hidden" id="textX" value="1">
-        <input type="hidden" id="textY" value="1">
         <div>
           <label class="ctrl-label">Font Size</label>
           <select id="textSize">
@@ -805,7 +799,7 @@
           <label class="ctrl-label">Scroll Speed: <span id="textScrollSpeedVal">Medium</span></label>
           <input type="range" min="1" max="5" value="3" id="textScrollSpeed" oninput="document.getElementById('textScrollSpeedVal').textContent=['Slow','Slow-Med','Medium','Med-Fast','Fast'][this.value-1]">
         </div>
-        <button class="btn" onclick="addTextLayer()" style="width:100%">+ Add Text Layer</button>
+        <button class="btn place-btn" id="textPlaceBtn" onclick="startPlacement('text')" style="width:100%">📍 Place Text on Matrix</button>
       </div>
     </div>
 
@@ -857,10 +851,6 @@
           <label class="ctrl-label">Mono Color</label>
           <input type="color" id="vuMonoColor" value="#00e5a0">
         </div>
-        <button class="btn place-btn" id="vuPlaceBtn" onclick="startPlacement('vu')" style="width:100%">📍 Drag Area on Matrix</button>
-        <div class="place-readout" id="vuPlaceReadout">
-          X: <span id="vuXVal">0</span> &nbsp; Y: <span id="vuYVal">0</span> &nbsp;·&nbsp; W: <span id="vuWVal">46</span> &nbsp; H: <span id="vuHVal">23</span>
-        </div>
         <input type="hidden" id="vuX" value="0">
         <input type="hidden" id="vuY" value="0">
         <input type="hidden" id="vuWidth" value="46">
@@ -886,7 +876,9 @@
             <input type="range" min="1" max="25" value="5" id="vuStepSize" oninput="document.getElementById('vuStepVal').textContent=this.value+'%'">
           </div>
         </div>
-        <button class="btn" onclick="addVuLayer()" style="width:100%">+ Add VU Meter Layer</button>
+        <button class="btn place-btn" id="vuPlaceBtn" onclick="startPlacement('vu')" style="width:100%">📍 Drag VU Area on Matrix</button>
+        <span id="vuXVal" style="display:none">0</span><span id="vuYVal" style="display:none">0</span>
+        <span id="vuWVal" style="display:none">46</span><span id="vuHVal" style="display:none">23</span>
       </div>
     </div>
 
@@ -899,12 +891,6 @@
       <div class="panel-body">
         <input type="file" id="imageUpload" accept="image/*" style="display:none" onchange="handleImageUpload(event)">
         <button class="btn" onclick="document.getElementById('imageUpload').click()" style="width:100%">Upload Image</button>
-        <button class="btn place-btn" id="imgPlaceBtn" onclick="startPlacement('image')" style="width:100%">📍 Place on Matrix</button>
-        <div class="place-readout" id="imgPlaceReadout">
-          Col (X): <span id="imgXVal">0</span> &nbsp;·&nbsp; Row (Y): <span id="imgYVal">0</span>
-        </div>
-        <input type="hidden" id="imgX" value="0">
-        <input type="hidden" id="imgY" value="0">
         <div>
           <label class="ctrl-label">Resize Mode</label>
           <select id="imgResize">
@@ -913,7 +899,9 @@
             <option value="original">Original Size</option>
           </select>
         </div>
-        <button class="btn" id="addImgBtn" onclick="addImageLayer()" style="width:100%" disabled>+ Add Image Layer</button>
+        <input type="hidden" id="imgX" value="0">
+        <input type="hidden" id="imgY" value="0">
+        <button class="btn place-btn" id="imgPlaceBtn" onclick="startPlacement('image')" style="width:100%" disabled>📍 Place Image on Matrix</button>
       </div>
     </div>
 
@@ -1145,6 +1133,7 @@ function initMatrix() {
         document.getElementById('vuWidth').value = w;
         document.getElementById('vuHeight').value = h;
         cancelPlacement();
+        addVuLayer();
       }
     }
     isDrawing = false;
@@ -1678,7 +1667,7 @@ function handleImageUpload(e) {
       }
     }
     pendingImageData = pixels;
-    document.getElementById('addImgBtn').disabled = false;
+    document.getElementById('imgPlaceBtn').disabled = false;
   };
   img.src = URL.createObjectURL(file);
 }
@@ -1695,7 +1684,7 @@ function addImageLayer() {
   dynamicLayers.push(layer);
   addLayerUI(layer, '🖼', 'Image');
   pendingImageData = null;
-  document.getElementById('addImgBtn').disabled = true;
+  document.getElementById('imgPlaceBtn').disabled = true;
   render();
   if (fundraiserActive) rebuildFundLayerList();
 }
@@ -1886,7 +1875,9 @@ function cancelPlacement() {
   ['textPlaceBtn', 'vuPlaceBtn', 'imgPlaceBtn'].forEach(id => {
     const btn = document.getElementById(id);
     btn.classList.remove('placing');
-    btn.innerHTML = id === 'vuPlaceBtn' ? '📍 Drag Area on Matrix' : '📍 Place on Matrix';
+    if (id === 'vuPlaceBtn') btn.innerHTML = '📍 Drag VU Area on Matrix';
+    else if (id === 'textPlaceBtn') btn.innerHTML = '📍 Place Text on Matrix';
+    else btn.innerHTML = '📍 Place Image on Matrix';
   });
 
   placementMode = null;
@@ -1898,15 +1889,15 @@ function handlePlacementClick(r, c) {
   if (placementMode === 'text') {
     document.getElementById('textX').value = c;
     document.getElementById('textY').value = r;
-    document.getElementById('textXVal').textContent = c;
-    document.getElementById('textYVal').textContent = r;
   } else if (placementMode === 'image') {
     document.getElementById('imgX').value = c;
     document.getElementById('imgY').value = r;
-    document.getElementById('imgXVal').textContent = c;
-    document.getElementById('imgYVal').textContent = r;
   }
+  const mode = placementMode;
   cancelPlacement();
+  // Auto-add the layer
+  if (mode === 'text') addTextLayer();
+  else if (mode === 'image') addImageLayer();
   return true;
 }
 
@@ -1957,12 +1948,9 @@ function handlePlacementDragEnd(r, c) {
   document.getElementById('vuY').value = minR;
   document.getElementById('vuWidth').value = maxC - minC + 1;
   document.getElementById('vuHeight').value = maxR - minR + 1;
-  document.getElementById('vuXVal').textContent = minC;
-  document.getElementById('vuYVal').textContent = minR;
-  document.getElementById('vuWVal').textContent = maxC - minC + 1;
-  document.getElementById('vuHVal').textContent = maxR - minR + 1;
 
   cancelPlacement();
+  addVuLayer();
   return true;
 }
 
