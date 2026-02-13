@@ -635,6 +635,58 @@
     flex-shrink: 0;
   }
 
+  /* ─── Placement Mode ─── */
+  .place-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    justify-content: center;
+  }
+  .place-btn.placing {
+    background: var(--accent) !important;
+    color: var(--bg-dark) !important;
+  }
+  .place-readout {
+    display: flex;
+    gap: 8px;
+    padding: 6px 8px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+  .place-readout span { color: var(--text-primary); }
+  .placement-banner {
+    display: none;
+    position: sticky;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 20;
+    padding: 8px 16px;
+    background: var(--accent);
+    color: var(--bg-dark);
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.5px;
+  }
+  .placement-banner.active { display: block; }
+  .matrix-grid.placing-point { cursor: pointer !important; }
+  .matrix-grid.placing-rect { cursor: crosshair !important; }
+  .placement-rect {
+    position: absolute;
+    border: 2px solid var(--accent);
+    background: rgba(0, 229, 160, 0.12);
+    pointer-events: none;
+    z-index: 5;
+    border-radius: 2px;
+  }
+
   /* ─── Responsive ─── */
   @media (max-width: 1100px) {
     .app-layout { flex-direction: column; }
@@ -732,16 +784,12 @@
             <input type="color" id="textColor" value="#ff4466">
           </div>
         </div>
-        <div class="ctrl-row-split">
-          <div>
-            <label class="ctrl-label">Start Col (X)</label>
-            <input type="number" id="textX" value="1" min="0" max="45" style="width:100%">
-          </div>
-          <div>
-            <label class="ctrl-label">Start Row (Y)</label>
-            <input type="number" id="textY" value="1" min="0" max="22" style="width:100%">
-          </div>
+        <button class="btn place-btn" id="textPlaceBtn" onclick="startPlacement('text')" style="width:100%">📍 Place on Matrix</button>
+        <div class="place-readout" id="textPlaceReadout">
+          Col (X): <span id="textXVal">1</span> &nbsp;·&nbsp; Row (Y): <span id="textYVal">1</span>
         </div>
+        <input type="hidden" id="textX" value="1">
+        <input type="hidden" id="textY" value="1">
         <div>
           <label class="ctrl-label">Font Size</label>
           <select id="textSize">
@@ -809,26 +857,14 @@
           <label class="ctrl-label">Mono Color</label>
           <input type="color" id="vuMonoColor" value="#00e5a0">
         </div>
-        <div class="ctrl-row-split">
-          <div>
-            <label class="ctrl-label">Start Col (X)</label>
-            <input type="number" id="vuX" value="0" min="0" max="45" style="width:100%">
-          </div>
-          <div>
-            <label class="ctrl-label">Start Row (Y)</label>
-            <input type="number" id="vuY" value="0" min="0" max="22" style="width:100%">
-          </div>
+        <button class="btn place-btn" id="vuPlaceBtn" onclick="startPlacement('vu')" style="width:100%">📍 Drag Area on Matrix</button>
+        <div class="place-readout" id="vuPlaceReadout">
+          X: <span id="vuXVal">0</span> &nbsp; Y: <span id="vuYVal">0</span> &nbsp;·&nbsp; W: <span id="vuWVal">46</span> &nbsp; H: <span id="vuHVal">23</span>
         </div>
-        <div class="ctrl-row-split">
-          <div>
-            <label class="ctrl-label">Width (cols)</label>
-            <input type="number" id="vuWidth" value="46" min="1" max="46" style="width:100%">
-          </div>
-          <div>
-            <label class="ctrl-label">Height (rows)</label>
-            <input type="number" id="vuHeight" value="23" min="1" max="23" style="width:100%">
-          </div>
-        </div>
+        <input type="hidden" id="vuX" value="0">
+        <input type="hidden" id="vuY" value="0">
+        <input type="hidden" id="vuWidth" value="46">
+        <input type="hidden" id="vuHeight" value="23">
         <!-- Animated-only controls -->
         <div id="vuAnimatedControls">
           <div>
@@ -863,16 +899,12 @@
       <div class="panel-body">
         <input type="file" id="imageUpload" accept="image/*" style="display:none" onchange="handleImageUpload(event)">
         <button class="btn" onclick="document.getElementById('imageUpload').click()" style="width:100%">Upload Image</button>
-        <div class="ctrl-row-split">
-          <div>
-            <label class="ctrl-label">Start Col (X)</label>
-            <input type="number" id="imgX" value="0" min="0" max="45" style="width:100%">
-          </div>
-          <div>
-            <label class="ctrl-label">Start Row (Y)</label>
-            <input type="number" id="imgY" value="0" min="0" max="22" style="width:100%">
-          </div>
+        <button class="btn place-btn" id="imgPlaceBtn" onclick="startPlacement('image')" style="width:100%">📍 Place on Matrix</button>
+        <div class="place-readout" id="imgPlaceReadout">
+          Col (X): <span id="imgXVal">0</span> &nbsp;·&nbsp; Row (Y): <span id="imgYVal">0</span>
         </div>
+        <input type="hidden" id="imgX" value="0">
+        <input type="hidden" id="imgY" value="0">
         <div>
           <label class="ctrl-label">Resize Mode</label>
           <select id="imgResize">
@@ -977,6 +1009,7 @@
 
   <!-- ════ MAIN AREA ════ -->
   <div class="main-area">
+    <div class="placement-banner" id="placementBanner">Click on the matrix to set position — ESC to cancel</div>
     <div class="matrix-toolbar">
       <div class="btn-group">
         <button class="btn btn-sm active" id="modeEdit" onclick="setMode('edit')">Edit</button>
@@ -993,6 +1026,7 @@
 
     <div class="matrix-scroll-area">
       <div class="matrix-wrapper" id="matrixWrapper">
+        <div class="placement-rect" id="placementRect" style="display:none"></div>
         <div class="matrix-grid" id="matrixGrid"></div>
         <div class="matrix-frame-label">23 ROWS × 46 COLS &nbsp;·&nbsp; 1058 LEDs</div>
       </div>
@@ -1045,29 +1079,50 @@ function initMatrix() {
       leds[r][c] = el;
     }
   }
-  document.addEventListener('mouseup', () => isDrawing = false);
+  document.addEventListener('mouseup', (e) => {
+    if (placementMode === 'vu' && placementDrag) {
+      const target = document.elementFromPoint(e.clientX, e.clientY);
+      if (target && target.classList.contains('led')) {
+        handlePlacementDragEnd(parseInt(target.dataset.r), parseInt(target.dataset.c));
+      } else {
+        // Ended outside grid, use last known position
+        cancelPlacement();
+      }
+    }
+    isDrawing = false;
+  });
 
   // ── Touch support for mobile/tablet ──
   grid.addEventListener('touchstart', (e) => {
     if (currentMode !== 'edit') return;
     e.preventDefault();
-    isDrawing = true;
     const touch = e.touches[0];
     const target = document.elementFromPoint(touch.clientX, touch.clientY);
     if (target && target.classList.contains('led')) {
-      applyTool(parseInt(target.dataset.r), parseInt(target.dataset.c));
+      const r = parseInt(target.dataset.r), c = parseInt(target.dataset.c);
+      if (placementMode) {
+        if (handlePlacementClick(r, c)) return;
+        if (handlePlacementDragStart(r, c)) return;
+        return;
+      }
+      isDrawing = true;
+      applyTool(r, c);
     }
   }, { passive: false });
 
   grid.addEventListener('touchmove', (e) => {
-    if (!isDrawing || currentMode !== 'edit') return;
+    if (currentMode !== 'edit') return;
     e.preventDefault();
     const touch = e.touches[0];
     const target = document.elementFromPoint(touch.clientX, touch.clientY);
     if (target && target.classList.contains('led')) {
       const r = parseInt(target.dataset.r);
       const c = parseInt(target.dataset.c);
-      // Avoid redundant redraws on the same LED
+      if (placementMode === 'vu' && placementDrag) {
+        handlePlacementDragMove(r, c);
+        return;
+      }
+      if (!isDrawing) return;
       if (r !== lastTouchR || c !== lastTouchC) {
         lastTouchR = r;
         lastTouchC = c;
@@ -1078,6 +1133,20 @@ function initMatrix() {
   }, { passive: false });
 
   grid.addEventListener('touchend', (e) => {
+    if (placementMode === 'vu' && placementDrag) {
+      // Use last known drag position
+      const lastR = parseInt(document.getElementById('vuYVal').textContent);
+      const lastC = parseInt(document.getElementById('vuXVal').textContent);
+      const w = parseInt(document.getElementById('vuWVal').textContent);
+      const h = parseInt(document.getElementById('vuHVal').textContent);
+      if (w > 0 && h > 0) {
+        document.getElementById('vuX').value = lastC;
+        document.getElementById('vuY').value = lastR;
+        document.getElementById('vuWidth').value = w;
+        document.getElementById('vuHeight').value = h;
+        cancelPlacement();
+      }
+    }
     isDrawing = false;
     lastTouchR = -1;
     lastTouchC = -1;
@@ -1109,14 +1178,26 @@ function getColor() {
 function startDraw(r, c, e) {
   if (currentMode !== 'edit') return;
   e.preventDefault();
+  // Placement mode intercept
+  if (placementMode) {
+    if (handlePlacementClick(r, c)) return;
+    if (handlePlacementDragStart(r, c)) return;
+    return;
+  }
   isDrawing = true;
   applyTool(r, c);
 }
 function continueDraw(r, c, e) {
+  // Placement drag intercept
+  if (placementMode === 'vu' && placementDrag) {
+    handlePlacementDragMove(r, c);
+    return;
+  }
   if (!isDrawing || currentMode !== 'edit') return;
   applyTool(r, c);
 }
 function clickLed(r, c, e) {
+  if (placementMode) return; // handled by startDraw
   if (currentMode !== 'edit') return;
   applyTool(r, c);
 }
@@ -1761,6 +1842,134 @@ function updateTextScrollSpeed(layerId, sliderVal) {
   layer.scrollSpeed = [0.5, 0.75, 1, 1.5, 2.5][parseInt(sliderVal) - 1];
   render();
 }
+
+// ═══════════════════════════════════════════
+// PLACEMENT MODE
+// ═══════════════════════════════════════════
+let placementMode = null; // null | 'text' | 'vu' | 'image'
+let placementDrag = null; // for VU drag: { startR, startC }
+
+function startPlacement(type) {
+  // If already in this mode, cancel
+  if (placementMode === type) { cancelPlacement(); return; }
+  cancelPlacement(); // clear any previous
+  placementMode = type;
+
+  const grid = document.getElementById('matrixGrid');
+  const banner = document.getElementById('placementBanner');
+
+  // Update button states
+  const btnId = type === 'vu' ? 'vuPlaceBtn' : type === 'image' ? 'imgPlaceBtn' : 'textPlaceBtn';
+  document.getElementById(btnId).classList.add('placing');
+  document.getElementById(btnId).innerHTML = '⏹ Cancel Placement';
+
+  if (type === 'vu') {
+    grid.classList.add('placing-rect');
+    banner.textContent = 'Click and drag on the matrix to define the VU meter area — ESC to cancel';
+  } else {
+    grid.classList.add('placing-point');
+    const label = type === 'text' ? 'text' : 'image';
+    banner.textContent = `Click on the matrix to place the ${label} — ESC to cancel`;
+  }
+  banner.classList.add('active');
+}
+
+function cancelPlacement() {
+  if (!placementMode) return;
+  const grid = document.getElementById('matrixGrid');
+  grid.classList.remove('placing-point', 'placing-rect');
+  document.getElementById('placementBanner').classList.remove('active');
+  document.getElementById('placementRect').style.display = 'none';
+  placementDrag = null;
+
+  // Reset all place buttons
+  ['textPlaceBtn', 'vuPlaceBtn', 'imgPlaceBtn'].forEach(id => {
+    const btn = document.getElementById(id);
+    btn.classList.remove('placing');
+    btn.innerHTML = id === 'vuPlaceBtn' ? '📍 Drag Area on Matrix' : '📍 Place on Matrix';
+  });
+
+  placementMode = null;
+}
+
+function handlePlacementClick(r, c) {
+  if (!placementMode) return false;
+  if (placementMode === 'vu') return false; // VU uses drag, not click
+  if (placementMode === 'text') {
+    document.getElementById('textX').value = c;
+    document.getElementById('textY').value = r;
+    document.getElementById('textXVal').textContent = c;
+    document.getElementById('textYVal').textContent = r;
+  } else if (placementMode === 'image') {
+    document.getElementById('imgX').value = c;
+    document.getElementById('imgY').value = r;
+    document.getElementById('imgXVal').textContent = c;
+    document.getElementById('imgYVal').textContent = r;
+  }
+  cancelPlacement();
+  return true;
+}
+
+function handlePlacementDragStart(r, c) {
+  if (placementMode !== 'vu') return false;
+  placementDrag = { startR: r, startC: c };
+  return true;
+}
+
+function handlePlacementDragMove(r, c) {
+  if (placementMode !== 'vu' || !placementDrag) return false;
+  const { startR, startC } = placementDrag;
+  const minR = Math.min(startR, r), maxR = Math.max(startR, r);
+  const minC = Math.min(startC, c), maxC = Math.max(startC, c);
+
+  // Update the visual selection rectangle
+  const rect = document.getElementById('placementRect');
+  const grid = document.getElementById('matrixGrid');
+  const firstLed = leds[0][0];
+  const lastLed = leds[ROWS-1][COLS-1];
+  const gridRect = grid.getBoundingClientRect();
+  const firstRect = leds[minR][minC].getBoundingClientRect();
+  const lastRect = leds[maxR][maxC].getBoundingClientRect();
+
+  const scale = zoom || 1;
+  rect.style.display = '';
+  rect.style.left = ((firstRect.left - gridRect.left) / scale) + 'px';
+  rect.style.top = ((firstRect.top - gridRect.top) / scale) + 'px';
+  rect.style.width = ((lastRect.right - firstRect.left) / scale) + 'px';
+  rect.style.height = ((lastRect.bottom - firstRect.top) / scale) + 'px';
+
+  // Update readout live
+  document.getElementById('vuXVal').textContent = minC;
+  document.getElementById('vuYVal').textContent = minR;
+  document.getElementById('vuWVal').textContent = maxC - minC + 1;
+  document.getElementById('vuHVal').textContent = maxR - minR + 1;
+
+  return true;
+}
+
+function handlePlacementDragEnd(r, c) {
+  if (placementMode !== 'vu' || !placementDrag) return false;
+  const { startR, startC } = placementDrag;
+  const minR = Math.min(startR, r), maxR = Math.max(startR, r);
+  const minC = Math.min(startC, c), maxC = Math.max(startC, c);
+
+  document.getElementById('vuX').value = minC;
+  document.getElementById('vuY').value = minR;
+  document.getElementById('vuWidth').value = maxC - minC + 1;
+  document.getElementById('vuHeight').value = maxR - minR + 1;
+  document.getElementById('vuXVal').textContent = minC;
+  document.getElementById('vuYVal').textContent = minR;
+  document.getElementById('vuWVal').textContent = maxC - minC + 1;
+  document.getElementById('vuHVal').textContent = maxR - minR + 1;
+
+  cancelPlacement();
+  return true;
+}
+
+// ESC key to cancel placement
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && placementMode) { cancelPlacement(); }
+});
 
 // ═══════════════════════════════════════════
 // UI HELPERS
