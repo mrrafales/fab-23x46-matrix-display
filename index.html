@@ -351,6 +351,7 @@
     gap: 2px;
     cursor: crosshair;
     touch-action: none;
+    position: relative;
   }
   .led {
     width: 12px;
@@ -799,6 +800,8 @@
           <label class="ctrl-label">Scroll Speed: <span id="textScrollSpeedVal">Medium</span></label>
           <input type="range" min="1" max="5" value="3" id="textScrollSpeed" oninput="document.getElementById('textScrollSpeedVal').textContent=['Slow','Slow-Med','Medium','Med-Fast','Fast'][this.value-1]">
         </div>
+        <input type="hidden" id="textX" value="1">
+        <input type="hidden" id="textY" value="1">
         <button class="btn place-btn" id="textPlaceBtn" onclick="startPlacement('text')" style="width:100%">📍 Place Text on Matrix</button>
       </div>
     </div>
@@ -1014,8 +1017,9 @@
 
     <div class="matrix-scroll-area">
       <div class="matrix-wrapper" id="matrixWrapper">
-        <div class="placement-rect" id="placementRect" style="display:none"></div>
-        <div class="matrix-grid" id="matrixGrid"></div>
+        <div class="matrix-grid" id="matrixGrid">
+          <div class="placement-rect" id="placementRect" style="display:none"></div>
+        </div>
         <div class="matrix-frame-label">23 ROWS × 46 COLS &nbsp;·&nbsp; 1058 LEDs</div>
       </div>
     </div>
@@ -1033,6 +1037,7 @@ let currentMode = 'edit';
 let isDrawing = false;
 let lastTouchR = -1;
 let lastTouchC = -1;
+let skipNextClick = false;
 let zoom = 1;
 let vuOrientation = 'vertical';
 let vuMode = 'animated';
@@ -1073,9 +1078,9 @@ function initMatrix() {
       if (target && target.classList.contains('led')) {
         handlePlacementDragEnd(parseInt(target.dataset.r), parseInt(target.dataset.c));
       } else {
-        // Ended outside grid, use last known position
         cancelPlacement();
       }
+      skipNextClick = true;
     }
     isDrawing = false;
   });
@@ -1186,6 +1191,7 @@ function continueDraw(r, c, e) {
   applyTool(r, c);
 }
 function clickLed(r, c, e) {
+  if (skipNextClick) { skipNextClick = false; return; }
   if (placementMode) return; // handled by startDraw
   if (currentMode !== 'edit') return;
   applyTool(r, c);
@@ -1895,6 +1901,7 @@ function handlePlacementClick(r, c) {
   }
   const mode = placementMode;
   cancelPlacement();
+  skipNextClick = true; // prevent the follow-up click from drawing
   // Auto-add the layer
   if (mode === 'text') addTextLayer();
   else if (mode === 'image') addImageLayer();
