@@ -269,23 +269,18 @@ body.fs .fs-exit:hover { border-color:var(--accent); color:var(--accent); }
   line-height:1;
 }
 .ly-move button:hover { border-color:var(--accent); color:var(--accent); }
-
-/* ─── CONNECTION DIALOG ─── */
-.conn-row {
-  display:flex; align-items:center; gap:6px;
-}
-.conn-row input {
-  font-family:monospace; font-size:11px; width:130px; padding:5px 8px;
-  background:var(--input); border:1px solid var(--border); border-radius:5px;
-  color:var(--text); outline:none;
-}
-.conn-row input:focus { border-color:var(--accent); }
-.conn-btn {
-  font-family:monospace; font-size:10px; font-weight:700; padding:5px 10px;
-  border:1px solid var(--accent); border-radius:5px; background:var(--accentD);
-  color:var(--accent); cursor:pointer;
-}
-.conn-btn:hover { background:var(--accent); color:var(--bg); }
+.stencil-row { display:flex; align-items:center; gap:6px; font-size:10px; padding:3px 4px; border-radius:4px; background:rgba(255,255,255,0.03); }
+.stencil-row label { display:flex; align-items:center; gap:5px; cursor:pointer; flex:1; }
+.stencil-row input[type=checkbox] { accent-color:var(--accent); }
+.stencil-row .st-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.stencil-row .st-swatch { width:12px; height:12px; border-radius:2px; border:1px solid rgba(255,255,255,0.15); flex-shrink:0; }
+.stencil-row.active { background:rgba(255,255,255,0.08); }
+.stencil-row { display:flex; align-items:center; gap:6px; font-size:10px; padding:3px 4px; border-radius:4px; background:rgba(255,255,255,0.03); }
+.stencil-row label { display:flex; align-items:center; gap:5px; cursor:pointer; flex:1; }
+.stencil-row input[type=checkbox] { accent-color:var(--accent); }
+.stencil-row .st-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.stencil-row .st-swatch { width:12px; height:12px; border-radius:2px; border:1px solid rgba(255,255,255,0.15); flex-shrink:0; }
+.stencil-row.active { background:rgba(255,255,255,0.08); }
 
 /* ─── SHOW IT BUTTON ─── */
 .show-it-btn {
@@ -455,14 +450,9 @@ body.fs .fs-exit:hover { border-color:var(--accent); color:var(--accent); }
       <span class="hw-lbl" id="hwLbl">Disconnected</span>
     </div>
     <h1>LED MATRIX STUDIO</h1>
-    <span class="dim">23×46 · WS2811 · Remote</span>
+    <span class="dim">23×46 · WS2811</span>
   </div>
   <div class="hdr-right">
-    <div class="conn-row">
-      <span style="font-size:9px;color:var(--text3)">ESP32 IP:</span>
-      <input type="text" id="espIp" placeholder="192.168.x.x" value="">
-      <button class="conn-btn" onclick="connectToESP()">Connect</button>
-    </div>
     <button class="show-it-btn" id="showItBtn" onclick="pushToDisplay()">⚡ SHOW IT!</button>
     <button class="show-it-btn" style="border-color:var(--danger);color:var(--danger);background:rgba(255,68,102,0.1);" onclick="clearDisplay()">✕ CLEAR</button>
     <button class="show-it-btn" style="border-color:var(--text2);color:var(--text2);background:rgba(255,255,255,0.05);" onclick="undo()" title="Undo (Ctrl+Z)">↩ UNDO</button>
@@ -669,6 +659,21 @@ body.fs .fs-exit:hover { border-color:var(--accent); color:var(--accent); }
     </div>
   </div>
 
+  <!-- STENCIL MODE -->
+  <div class="pnl">
+    <div class="pnl-hdr" onclick="togPnl(this)">
+      <span class="pnl-title">⬡ Stencil Mode</span><span class="pnl-arrow">▼</span>
+    </div>
+    <div class="pnl-body">
+      <div style="font-size:9px;color:var(--text3);margin-bottom:6px">Convert colored pixels to white for peg placement guides. Original colors are preserved — toggle on/off anytime.</div>
+      <div id="stencilLayers" style="display:flex;flex-direction:column;gap:3px"></div>
+      <div class="row2" style="margin-top:6px;gap:4px">
+        <button class="btn" onclick="stencilAll(true)" style="flex:1">⬜ All White</button>
+        <button class="btn" onclick="stencilAll(false)" style="flex:1">🎨 All Color</button>
+      </div>
+    </div>
+  </div>
+
   <!-- SAVE/LOAD -->
   <div class="pnl">
     <div class="pnl-hdr" onclick="togPnl(this)">
@@ -685,34 +690,6 @@ body.fs .fs-exit:hover { border-color:var(--accent); color:var(--accent); }
       </div>
       <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(event)">
       <div id="saveStatus" style="font-size:10px;color:var(--text3);min-height:14px;"></div>
-    </div>
-  </div>
-
-  <!-- WIFI SETTINGS -->
-  <div class="pnl">
-    <div class="pnl-hdr" onclick="togPnl(this)">
-      <span class="pnl-title">📶 WiFi Settings</span><span class="pnl-arrow">▼</span>
-    </div>
-    <div class="pnl-body">
-      <div id="wifiStatus" style="font-size:10px;color:var(--text2);margin-bottom:4px">
-        Mode: <span id="wifiMode">—</span> | IP: <span id="wifiIp">—</span>
-      </div>
-      <div style="font-size:9px;color:var(--text3);margin-bottom:6px">
-        Enter router credentials to switch to Station mode. ESP32 reboots after saving. Clears credentials to return to AP mode.
-      </div>
-      <div>
-        <span class="lbl">Router SSID</span>
-        <input type="text" id="staSSID" placeholder="Your WiFi network name">
-      </div>
-      <div>
-        <span class="lbl">Router Password</span>
-        <input type="text" id="staPass" placeholder="WiFi password">
-      </div>
-      <div class="row2" style="margin-top:4px">
-        <button class="btn" onclick="saveWifiCreds()" style="width:100%">💾 Save & Reboot</button>
-        <button class="btn" onclick="clearWifiCreds()" style="width:100%;color:var(--danger);border-color:var(--danger)">✕ Clear → AP Mode</button>
-      </div>
-      <button class="btn" onclick="rebootESP()" style="width:100%;margin-top:4px;font-size:10px;color:var(--text3)">🔄 Reboot ESP32</button>
     </div>
   </div>
 
@@ -1138,6 +1115,7 @@ function rebuildLayerUI() {
   });
   // Re-highlight active draw layer
   if(activeDrawLayer) selectDrawLayer(activeDrawLayer);
+  refreshStencilUI();
 }
 
 function undo() {
@@ -1480,6 +1458,33 @@ function render() {
     }
     else if(ly.type==='text') renderText(ly,buf);
     else if(ly.type==='image') renderImage(ly,buf);
+  }
+
+  // Stencil post-process: convert stenciled layer pixels to white
+  // This runs AFTER normal compositing so it can't interfere with drawing
+  if(dynLayers.some(l=>l.stencil)){
+    // Build a mask of which pixels belong to stenciled layers
+    const mask = Array.from({length:ROWS}, ()=>Array(COLS).fill(false));
+    for(const ly of dynLayers){
+      if(!ly.vis || !ly.stencil) continue;
+      if(ly.type==='draw') {
+        for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++)
+          if(ly.data[r][c]) mask[r][c]=true;
+      }
+      else if(ly.type==='text') {
+        const bmp=getTextBmp(ly.text,ly.size);
+        let ox=ly.x;
+        if(ly.scroll){const spd=ly.scrollSpeed||1;const time=Date.now()/(800/spd);ox=COLS-(Math.floor(time)%(bmp[0]?bmp[0].length+COLS:COLS));}
+        for(let r=0;r<bmp.length;r++) for(let c=0;c<bmp[r].length;c++)
+          if(bmp[r][c]){const gr=ly.y+r,gc=ox+c;if(gr>=0&&gr<ROWS&&gc>=0&&gc<COLS) mask[gr][gc]=true;}
+      }
+      else if(ly.type==='image' && ly.pixels) {
+        for(let r=0;r<ly.pixels.length;r++) for(let c=0;c<ly.pixels[r].length;c++)
+          if(ly.pixels[r][c]){const gr=ly.y+r,gc=ly.x+c;if(gr>=0&&gr<ROWS&&gc>=0&&gc<COLS) mask[gr][gc]=true;}
+      }
+    }
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++)
+      if(mask[r][c] && buf[r][c]) buf[r][c]='#ffffff';
   }
 
   // Live shape preview — draw directly onto buffer without modifying draw layer
@@ -2108,25 +2113,10 @@ function decodeLogoPixel(logo, r, c) {
 // ═══════════════════════════════════════════
 let ws=null, wsOk=false, reconTimer=null, lastSend=0;
 const THROTTLE=33;
-let espHost = ''; // configured by user or auto-detected
-
-function connectToESP() {
-  const input = document.getElementById('espIp');
-  const ip = input.value.trim();
-  if(!ip) { alert('Enter the ESP32 IP address'); return; }
-  espHost = ip;
-  localStorage.setItem('espHost', ip);
-  if(ws) { ws.onclose=null; ws.close(); }
-  wsOk=false;
-  connectWS();
-}
 
 function connectWS(){
-  // Priority: manually set IP > saved IP > same-host (ESP32 serving the page)
-  if(!espHost) espHost = localStorage.getItem('espHost') || '';
-  const host = espHost || location.hostname || '192.168.4.1';
-  const port = espHost ? '80' : (location.port||'80');
-  if(espHost) document.getElementById('espIp').value = espHost;
+  const host=location.hostname||'192.168.4.1';
+  const port=location.port||'80';
   updHW('try');
   try{ws=new WebSocket('ws://'+host+':'+port+'/ws');ws.binaryType='arraybuffer';}catch(e){updHW('off');schedRecon();return;}
   ws.onopen=()=>{wsOk=true;updHW('ok');if(reconTimer){clearTimeout(reconTimer);reconTimer=null;}ws.send('info');};
@@ -2796,52 +2786,48 @@ function deleteScene(slot) {
 initSceneUI();
 
 // ═══════════════════════════════════════════
-// WIFI SETTINGS
+// STENCIL MODE
 // ═══════════════════════════════════════════
-function getApiBase() {
-  return espHost ? ('http://'+espHost) : '';
+
+function refreshStencilUI() {
+  const container = document.getElementById('stencilLayers');
+  if(!container) return;
+  container.innerHTML = '';
+
+  dynLayers.forEach(l => {
+    if(l.type==='vu') return;
+    const row = document.createElement('div');
+    row.className = 'stencil-row' + (l.stencil ? ' active' : '');
+
+    let icon = '🖌', name = l.id;
+    if(l.type==='draw') { icon='🖌'; name=l.name||l.id; }
+    else if(l.type==='text') { icon='✎'; name='"'+l.text.substring(0,14)+'"'; }
+    else if(l.type==='image') { icon='🖼'; name='Image'; }
+    else if(l.type==='bitmap') { icon='⬡'; name=l.bmpName||'Bitmap'; }
+    else if(l.type==='logo') { icon='🏫'; name=l.logoName||'Logo'; }
+
+    row.innerHTML = `
+      <label>
+        <input type="checkbox" ${l.stencil?'checked':''} onchange="toggleStencil('${l.id}',this.checked)">
+        <span>${icon}</span>
+        <span class="st-name">${name}</span>
+      </label>
+      <span class="st-swatch" style="background:${l.stencil?'#ffffff':(l.color||'var(--accent)')}"></span>
+    `;
+    container.appendChild(row);
+  });
 }
 
-function fetchWifiStatus() {
-  const base = getApiBase();
-  if(!base && !location.hostname) return;
-  fetch(base+'/api/wifi').then(r=>r.json()).then(d=>{
-    document.getElementById('wifiMode').textContent = d.mode||'—';
-    document.getElementById('wifiIp').textContent = d.ip||'—';
-    if(d.staSSID) document.getElementById('staSSID').value = d.staSSID;
-  }).catch(()=>{});
+function toggleStencil(id, on) {
+  const l = dynLayers.find(l=>l.id===id);
+  if(l) { l.stencil = on; render(); refreshStencilUI(); }
 }
 
-function saveWifiCreds() {
-  const ssid = document.getElementById('staSSID').value.trim();
-  const pass = document.getElementById('staPass').value;
-  if(!ssid) { alert('Enter an SSID'); return; }
-  if(!confirm('Save WiFi credentials and reboot ESP32?\n\nSSID: '+ssid+'\n\nThe ESP32 will restart and try to connect to this network. If it fails, it will fall back to AP mode (SSID: LED-Matrix).')) return;
-  const base = getApiBase();
-  const body = new URLSearchParams({ssid:ssid, password:pass});
-  fetch(base+'/api/wifi/set', {method:'POST', body:body})
-    .then(()=>{ alert('ESP32 is rebooting...\n\nIf connecting to a new network, you will need to find the new IP from your router or serial monitor.'); })
-    .catch(e=>alert('Failed to save: '+e));
+function stencilAll(on) {
+  dynLayers.forEach(l => { if(l.type!=='vu') l.stencil = on; });
+  render();
+  refreshStencilUI();
 }
-
-function clearWifiCreds() {
-  if(!confirm('Clear saved WiFi credentials and switch to AP mode?\n\nESP32 will reboot and create its own network.')) return;
-  const base = getApiBase();
-  fetch(base+'/api/wifi/clear', {method:'POST'})
-    .then(()=>{ alert('ESP32 is rebooting into AP mode.\n\nConnect to WiFi: LED-Matrix (password: ledmatrix)'); })
-    .catch(e=>alert('Failed: '+e));
-}
-
-function rebootESP() {
-  if(!confirm('Reboot the ESP32?')) return;
-  const base = getApiBase();
-  fetch(base+'/api/reboot', {method:'POST'})
-    .then(()=>{ alert('ESP32 is rebooting...'); })
-    .catch(e=>alert('Failed: '+e));
-}
-
-// Fetch WiFi status when connected
-setTimeout(fetchWifiStatus, 2000);
 
 // ═══════════════════════════════════════════
 // PINCH-TO-ZOOM
