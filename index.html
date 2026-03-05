@@ -532,7 +532,8 @@ body.fs .fs-exit:hover { border-color:var(--accent); color:var(--accent); }
       <span class="pnl-title">✎ Add Text</span><span class="pnl-arrow">▼</span>
     </div>
     <div class="pnl-body">
-      <input type="text" id="txtInput" value="HELLO" placeholder="Enter text..." maxlength="30">
+      <input type="text" id="txtInput" value="HELLO" placeholder="Enter text..." maxlength="60">
+      <div style="font-size:8px;color:var(--text3);margin:-2px 0 4px;line-height:1.3">Variables: <b>{pct}</b> reached · <b>{left}</b> to go · <b>{raised}</b> · <b>{goal}</b> · <b>{remaining}</b></div>
       <div class="row2">
         <div>
           <span class="lbl">Color</span>
@@ -745,6 +746,18 @@ body.fs .fs-exit:hover { border-color:var(--accent); color:var(--accent); }
       <button class="modal-close" onclick="toggleFundModal()">✕</button>
     </div>
     <div class="modal-body">
+      <!-- Quick Setup Presets -->
+      <div style="margin-bottom:8px;padding:8px;background:rgba(0,229,160,0.05);border:1px solid rgba(0,229,160,0.15);border-radius:6px;">
+        <div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:6px;letter-spacing:0.5px">⚡ QUICK SETUP — Event Layouts</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">
+          <button class="btn" onclick="loadEventPreset('thermometer')" style="flex:1;min-width:100px;font-size:9px">🌡 Thermometer</button>
+          <button class="btn" onclick="loadEventPreset('scoreboard')" style="flex:1;min-width:100px;font-size:9px">📊 Scoreboard</button>
+          <button class="btn" onclick="loadEventPreset('interactive')" style="flex:1;min-width:100px;font-size:9px">🎨 Interactive</button>
+          <button class="btn" onclick="loadEventPreset('celebration')" style="flex:1;min-width:100px;font-size:9px">🎉 Celebration</button>
+        </div>
+        <div style="font-size:8px;color:var(--text3);margin-top:4px">Loads a complete layout. Your current design will be saved to undo.</div>
+      </div>
+
       <!-- Goal (shared across all tabs) -->
       <div>
         <span class="lbl">Fundraiser Goal ($)</span>
@@ -883,6 +896,35 @@ body.fs .fs-exit:hover { border-color:var(--accent); color:var(--accent); }
           <select id="donVuLink" onchange="updateDonationTracker()">
             <option value="">None</option>
           </select>
+        </div>
+
+        <!-- Show % on LED display -->
+        <div style="margin-top:4px;padding:6px 8px;background:rgba(255,255,255,0.03);border-radius:6px;">
+          <label class="chk" style="font-size:11px;margin-bottom:4px">
+            <input type="checkbox" id="donShowPct" onchange="toggleDonPctDisplay(this.checked)">
+            Show % on LED Display
+          </label>
+          <div id="donPctOptions" style="display:none;margin-top:6px">
+            <div class="row2" style="gap:6px">
+              <div>
+                <span class="lbl">Color</span>
+                <input type="color" id="donPctColor" value="#00e5a0" onchange="updateDonPctLayer()" style="width:100%;height:24px">
+              </div>
+              <div>
+                <span class="lbl">Size</span>
+                <select id="donPctSize" onchange="updateDonPctLayer()" style="width:100%;font-size:10px;padding:4px">
+                  <option value="small">Small</option>
+                  <option value="medium" selected>Medium</option>
+                  <option value="large">Large</option>
+                </select>
+              </div>
+            </div>
+            <label class="chk" style="font-size:10px;margin-top:4px">
+              <input type="checkbox" id="donPctScroll" onchange="updateDonPctLayer()">
+              Scroll text
+            </label>
+            <button class="btn" onclick="repositionDonPct()" style="width:100%;margin-top:4px;font-size:9px">📍 Click to Place on Grid</button>
+          </div>
         </div>
       </div>
 
@@ -1032,6 +1074,18 @@ function getActiveDrawData() {
 
 function applyTool(r, c) {
   if (placeMode) return;
+  if (tool==='erase') {
+    // Erase from the topmost visible layer that has a pixel at each brush position
+    const half = Math.floor(brushSize/2);
+    for(let dr=-half;dr<brushSize-half;dr++)
+      for(let dc=-half;dc<brushSize-half;dc++){
+        const rr=r+dr, cc=c+dc;
+        if(rr<0||rr>=ROWS||cc<0||cc>=COLS) continue;
+        erasePixelAt(rr, cc);
+      }
+    render();
+    return;
+  }
   const data = getActiveDrawData();
   if (!data) return;
   if (tool==='fill') {
@@ -1039,8 +1093,8 @@ function applyTool(r, c) {
     floodFill(r, c, data[r][c], getColor());
     render(); return;
   }
-  if (tool==='draw'||tool==='erase') {
-    const color = tool==='draw' ? getColor() : null;
+  if (tool==='draw') {
+    const color = getColor();
     const half = Math.floor(brushSize/2);
     for(let dr=-half;dr<brushSize-half;dr++)
       for(let dc=-half;dc<brushSize-half;dc++){
@@ -1049,6 +1103,28 @@ function applyTool(r, c) {
       }
   }
   render();
+}
+
+// Erase pixel at (r,c) from the topmost visible layer that has content there
+function erasePixelAt(r, c) {
+  // Walk layers top-down (last in array = topmost)
+  for(let i=dynLayers.length-1; i>=0; i--){
+    const ly = dynLayers[i];
+    if(!ly.vis) continue;
+
+    if(ly.type==='draw' && ly.data[r][c]) {
+      ly.data[r][c] = null;
+      return;
+    }
+
+    if(ly.type==='image' && ly.pixels) {
+      const pr = r - ly.y, pc = c - ly.x;
+      if(pr>=0 && pr<ly.pixels.length && pc>=0 && pc<ly.pixels[pr].length && ly.pixels[pr][pc]) {
+        ly.pixels[pr][pc] = null;
+        return;
+      }
+    }
+  }
 }
 
 // Save undo snapshot — captures full dynLayers state
@@ -1290,6 +1366,9 @@ const FONT={
   '#':['01010','01010','11111','01010','11111','01010','01010'],
   ':':['00000','00100','00100','00000','00100','00100','00000'],
   ',':['00000','00000','00000','00000','00000','00100','01000'],
+  '%':['11001','11010','00010','00100','01000','01011','10011'],
+  '$':['00100','01111','10100','01110','00101','11110','00100'],
+  '/':['00001','00010','00010','00100','01000','01000','10000'],
 };
 
 function getTextBmp(text, size) {
@@ -1397,8 +1476,24 @@ function renderVU(layer, buf) {
 // ═══════════════════════════════════════════
 // TEXT RENDERING
 // ═══════════════════════════════════════════
+function resolveTextVars(text) {
+  const goal = parseFloat(document.getElementById('fundGoal').value) || 0;
+  const pct = goal > 0 ? Math.min(100, (donationTotal / goal) * 100) : 0;
+  const remaining = Math.max(0, 100 - pct);
+  const raised = donationTotal;
+  const left = Math.max(0, goal - donationTotal);
+
+  return text
+    .replace(/\{pct\}/gi, Math.round(pct) + '%')
+    .replace(/\{left\}/gi, Math.round(remaining) + '%')
+    .replace(/\{raised\}/gi, '$' + Math.round(raised))
+    .replace(/\{goal\}/gi, '$' + Math.round(goal))
+    .replace(/\{remaining\}/gi, '$' + Math.round(left));
+}
+
 function renderText(layer, buf) {
-  const bmp = getTextBmp(layer.text, layer.size);
+  const displayText = resolveTextVars(layer.text);
+  const bmp = getTextBmp(displayText, layer.size);
   const totalW = bmp[0]?bmp[0].length:0;
   let ox = layer.x;
   if(layer.scroll) {
@@ -1472,7 +1567,7 @@ function render() {
           if(ly.data[r][c]) mask[r][c]=true;
       }
       else if(ly.type==='text') {
-        const bmp=getTextBmp(ly.text,ly.size);
+        const bmp=getTextBmp(resolveTextVars(ly.text),ly.size);
         let ox=ly.x;
         if(ly.scroll){const spd=ly.scrollSpeed||1;const time=Date.now()/(800/spd);ox=COLS-(Math.floor(time)%(bmp[0]?bmp[0].length+COLS:COLS));}
         for(let r=0;r<bmp.length;r++) for(let c=0;c<bmp[r].length;c++)
@@ -1549,6 +1644,7 @@ function startPlacement(type) {
 
 function cancelPlace() {
   if(!placeMode) return;
+  const wasDonPct = placeMode === 'donpct';
   document.getElementById('placeBanner').classList.remove('on');
   grid.style.cursor='crosshair';
   placeDrag=null;
@@ -1563,12 +1659,20 @@ function cancelPlace() {
   });
   hideShapePreview();
   placeMode=null;
+  // Reopen fundraiser modal if we were placing the donation %
+  if(wasDonPct) document.getElementById('fundModal').style.display = 'block';
 }
 
 function handlePlaceDown(r,c) {
   if(placeMode==='vu'||placeMode==='bitmap'||placeMode==='logo') { placeDrag={startR:r,startC:c,lastR:r,lastC:c}; return; }
   if(placeMode==='text') { cancelPlace(); addTextLayer(r,c); return; }
   if(placeMode==='image') { cancelPlace(); addImageLayer(r,c); return; }
+  if(placeMode==='donpct') {
+    const ly = dynLayers.find(l => l.id === donPctLayerId);
+    if(ly) { ly.x = c; ly.y = r; ly._manualPos = true; render(); }
+    cancelPlace();
+    return;
+  }
 }
 
 function handlePlaceDrag(r,c) {
@@ -1707,7 +1811,7 @@ function addTextLayer(r, c) {
     x:c, y:r,
     size: document.getElementById('txtSize').value,
     scroll: document.getElementById('txtScroll').checked,
-    scrollSpeed: [0.5,0.75,1,1.5,2.5][document.getElementById('txtSpeed').value-1],
+    scrollSpeed: [0.5,1,2,4,8][document.getElementById('txtSpeed').value-1],
   };
   dynLayers.push(layer);
   addLayerUI(layer,'✎','"'+layer.text.substring(0,12)+'"');
@@ -1798,7 +1902,7 @@ function addLayerUI(layer, icon, name) {
 
   // Text inline controls
   if(layer.type==='text'){
-    const spdVal=[0.5,0.75,1,1.5,2.5].indexOf(layer.scrollSpeed);
+    const spdVal=[0.5,1,2,4,8].indexOf(layer.scrollSpeed);
     ctrl=`<div class="ly-ctrl">
       <div class="row"><span class="lbl" style="margin:0;min-width:30px">Text</span>
         <input type="text" value="${layer.text}" onchange="updLy('${layer.id}','text',this.value)" style="flex:1">
@@ -1929,7 +2033,7 @@ function updLy(id,prop,val) {
 }
 function updLySpd(id,val) {
   const l=dynLayers.find(l=>l.id===id); if(!l) return;
-  l.scrollSpeed=[0.5,0.75,1,1.5,2.5][val-1]; render();
+  l.scrollSpeed=[0.5,1,2,4,8][val-1]; render();
 }
 function togLyRainbow(id,el) {
   const l=dynLayers.find(l=>l.id===id); if(!l) return;
@@ -2660,6 +2764,427 @@ function updateDonationTracker() {
       render();
     }
   }
+
+  // Update % text on display if enabled
+  if(donPctLayerId) updateDonPctLayer();
+}
+
+// ═══════════════════════════════════════════
+// DONATION % ON DISPLAY
+// ═══════════════════════════════════════════
+let donPctLayerId = null; // Track the auto-managed text layer
+
+function toggleDonPctDisplay(on) {
+  document.getElementById('donPctOptions').style.display = on ? '' : 'none';
+  if(on) {
+    createDonPctLayer();
+  } else {
+    removeDonPctLayer();
+  }
+}
+
+function createDonPctLayer() {
+  // Remove existing if any
+  removeDonPctLayer();
+
+  const goal = parseFloat(document.getElementById('fundGoal').value) || 0;
+  const pct = goal > 0 ? Math.min(100, (donationTotal / goal) * 100) : 0;
+  const pctText = Math.round(pct) + '%';
+
+  const id = 'donpct_' + (++layerIdN);
+  donPctLayerId = id;
+
+  const color = document.getElementById('donPctColor').value;
+  const size = document.getElementById('donPctSize').value;
+  const scroll = document.getElementById('donPctScroll').checked;
+
+  // Center the text vertically
+  const fontH = size==='small' ? 5 : size==='large' ? 9 : 7;
+  const y = Math.floor((ROWS - fontH) / 2);
+
+  // Center horizontally (approximate: each char ~6px wide)
+  const charW = pctText.length * 6;
+  const x = Math.max(0, Math.floor((COLS - charW) / 2));
+
+  const layer = {
+    id, type:'text', vis:true,
+    text: pctText,
+    color: color,
+    rainbow: false,
+    x: x, y: y,
+    size: size,
+    scroll: scroll,
+    scrollSpeed: 1,
+    _isDonPct: true  // marker so we know this is auto-managed
+  };
+
+  dynLayers.push(layer);
+  addLayerUI(layer, '🎯', pctText);
+  render();
+}
+
+function removeDonPctLayer() {
+  if(!donPctLayerId) return;
+  const idx = dynLayers.findIndex(l => l.id === donPctLayerId);
+  if(idx >= 0) {
+    dynLayers.splice(idx, 1);
+    const el = document.querySelector('[data-ly-id="' + donPctLayerId + '"]');
+    if(el) el.remove();
+  }
+  donPctLayerId = null;
+  render();
+}
+
+function updateDonPctLayer() {
+  if(!donPctLayerId) return;
+  const ly = dynLayers.find(l => l.id === donPctLayerId);
+  if(!ly) { donPctLayerId = null; return; }
+
+  const goal = parseFloat(document.getElementById('fundGoal').value) || 0;
+  const pct = goal > 0 ? Math.min(100, (donationTotal / goal) * 100) : 0;
+  const pctText = Math.round(pct) + '%';
+
+  ly.text = pctText;
+  ly.color = document.getElementById('donPctColor').value;
+  ly.size = document.getElementById('donPctSize').value;
+  ly.scroll = document.getElementById('donPctScroll').checked;
+
+  // Only auto-center if position hasn't been manually set
+  if(!ly._manualPos) {
+    const fontH = ly.size==='small' ? 5 : ly.size==='large' ? 9 : 7;
+    ly.y = Math.floor((ROWS - fontH) / 2);
+    const charW = pctText.length * 6;
+    ly.x = Math.max(0, Math.floor((COLS - charW) / 2));
+  }
+
+  // Update layer UI label
+  const nameEl = document.querySelector('[data-ly-id="' + donPctLayerId + '"] .ly-name');
+  if(nameEl) nameEl.textContent = pctText;
+
+  render();
+}
+
+function repositionDonPct() {
+  if(!donPctLayerId) return;
+  // Hide the fundraiser modal so user can click the grid
+  document.getElementById('fundModal').style.display = 'none';
+  cancelPlace();
+  placeMode = 'donpct';
+  const banner = document.getElementById('placeBanner');
+  banner.textContent = 'Click on matrix to place percentage display — ESC to cancel';
+  grid.style.cursor = 'pointer';
+  banner.classList.add('on');
+}
+
+// ═══════════════════════════════════════════
+// EVENT PRESET SCENES
+// ═══════════════════════════════════════════
+
+function loadEventPreset(preset) {
+  saveUndo();
+
+  // Clear everything
+  dynLayers.length = 0;
+  Object.keys(vuStates).forEach(k => delete vuStates[k]);
+  activeDrawLayer = null;
+  donPctLayerId = null;
+  const list = document.getElementById('lyList');
+  list.querySelectorAll('[data-ly-id]').forEach(el => el.remove());
+
+  switch(preset) {
+    case 'thermometer': buildThermometerPreset(); break;
+    case 'scoreboard': buildScoreboardPreset(); break;
+    case 'interactive': buildInteractivePreset(); break;
+    case 'celebration': buildCelebrationPreset(); break;
+  }
+
+  rebuildLayerUI();
+  render();
+}
+
+// ─── PRESET 1: THERMOMETER ────────────────────────
+// Left: tall VU meter thermometer (donation-linked)
+// Center: big scrolling percentage
+// Right: Mariemont M logo
+function buildThermometerPreset() {
+  // Dark blue background
+  layers.bg.color = '#050a1e';
+  document.getElementById('bgColor').value = '#050a1e';
+
+  // 1. VU thermometer — left side, full height
+  const vuId = 'vu_' + (++layerIdN);
+  dynLayers.push({
+    id: vuId, type: 'vu', vis: true, vuMode: 'static',
+    orient: 'vertical', bars: 1,
+    colorMode: 'gradient',
+    monoColor: '#00e5a0',
+    x: 0, y: 0, w: 5, h: 23,
+  });
+  vuStates[vuId] = { levels: [0], peaks: [0], decay: [0] };
+
+  // Auto-link to donation tracker
+  setTimeout(() => {
+    updateDonVuSelect();
+    const sel = document.getElementById('donVuLink');
+    if(sel) { sel.value = vuId; }
+  }, 100);
+
+  // 2. Scrolling "DONATE TODAY" text — top area
+  dynLayers.push({
+    id: 'txt_' + (++layerIdN), type: 'text', vis: true,
+    text: 'DONATE TODAY!', color: '#ffd60a',
+    rainbow: false, x: 8, y: 1,
+    size: 'small', scroll: true, scrollSpeed: 0.75,
+  });
+
+  // 3. Percentage text — center, large
+  const pctId = 'donpct_' + (++layerIdN);
+  donPctLayerId = pctId;
+  dynLayers.push({
+    id: pctId, type: 'text', vis: true,
+    text: '0%', color: '#00e5a0',
+    rainbow: false, x: 17, y: 8,
+    size: 'large', scroll: false, scrollSpeed: 1,
+    _isDonPct: true, _manualPos: true,
+  });
+  // Enable the checkbox in the UI
+  setTimeout(() => {
+    const cb = document.getElementById('donShowPct');
+    if(cb) { cb.checked = true; document.getElementById('donPctOptions').style.display = ''; }
+  }, 100);
+
+  // 4. "GOAL: $___" scrolling at bottom
+  const goal = document.getElementById('fundGoal').value || '1000';
+  dynLayers.push({
+    id: 'txt_' + (++layerIdN), type: 'text', vis: true,
+    text: 'GOAL: $' + goal, color: '#4488ff',
+    rainbow: false, x: 8, y: 17,
+    size: 'small', scroll: true, scrollSpeed: 0.5,
+  });
+
+  // 5. Mariemont M logo — right side
+  const logo = logoPresets[0]; // M Solo
+  const mPixels = [];
+  for(let r = 0; r < logo.h; r++) {
+    mPixels[r] = [];
+    for(let c = 0; c < logo.w; c++) {
+      mPixels[r][c] = decodeLogoPixel(logo, r, c);
+    }
+  }
+  dynLayers.push({
+    id: 'logo_' + (++layerIdN), type: 'image', vis: true,
+    pixels: mPixels, x: 24, y: 1,
+  });
+}
+
+// ─── PRESET 2: SCOREBOARD ─────────────────────────
+// Clean stats display: big dollar amount + percentage bar
+// Professional look for formal events
+function buildScoreboardPreset() {
+  layers.bg.color = '#08001a';
+  document.getElementById('bgColor').value = '#08001a';
+
+  // 1. "RAISED" label top
+  dynLayers.push({
+    id: 'txt_' + (++layerIdN), type: 'text', vis: true,
+    text: 'RAISED', color: '#8888aa',
+    rainbow: false, x: 1, y: 0,
+    size: 'small', scroll: false, scrollSpeed: 1,
+  });
+
+  // 2. Dollar amount — will show $0 initially, updates with donations
+  const pctId = 'donpct_' + (++layerIdN);
+  donPctLayerId = pctId;
+  dynLayers.push({
+    id: pctId, type: 'text', vis: true,
+    text: '0%', color: '#00ff88',
+    rainbow: false, x: 18, y: 0,
+    size: 'small', scroll: false, scrollSpeed: 1,
+    _isDonPct: true, _manualPos: true,
+  });
+  setTimeout(() => {
+    const cb = document.getElementById('donShowPct');
+    if(cb) { cb.checked = true; document.getElementById('donPctOptions').style.display = ''; }
+  }, 100);
+
+  // 3. Wide horizontal VU meter — progress bar across middle
+  const vuId = 'vu_' + (++layerIdN);
+  dynLayers.push({
+    id: vuId, type: 'vu', vis: true, vuMode: 'static',
+    orient: 'horizontal', bars: 1,
+    colorMode: 'gradient',
+    monoColor: '#00e5a0',
+    x: 1, y: 7, w: 44, h: 5,
+  });
+  vuStates[vuId] = { levels: [0], peaks: [0], decay: [0] };
+  setTimeout(() => {
+    updateDonVuSelect();
+    const sel = document.getElementById('donVuLink');
+    if(sel) { sel.value = vuId; }
+  }, 100);
+
+  // 4. Mariemont logo — centered below bar
+  const logo = logoPresets[1]; // M Circle
+  const mPixels = [];
+  for(let r = 0; r < logo.h; r++) {
+    mPixels[r] = [];
+    for(let c = 0; c < logo.w; c++) {
+      mPixels[r][c] = decodeLogoPixel(logo, r, c);
+    }
+  }
+  dynLayers.push({
+    id: 'logo_' + (++layerIdN), type: 'image', vis: true,
+    pixels: mPixels, x: 0, y: 0,
+  });
+
+  // 5. Scrolling message at bottom
+  dynLayers.push({
+    id: 'txt_' + (++layerIdN), type: 'text', vis: true,
+    text: 'EVERY PIXEL COUNTS - THANK YOU FOR YOUR SUPPORT!', color: '#ffd60a',
+    rainbow: false, x: 0, y: 15,
+    size: 'medium', scroll: true, scrollSpeed: 0.75,
+  });
+}
+
+// ─── PRESET 3: INTERACTIVE ────────────────────────
+// "Buy a pixel" layout: drawing canvas with borders
+// VU thermometer on left, logo bottom-right
+function buildInteractivePreset() {
+  layers.bg.color = '#0a0a14';
+  document.getElementById('bgColor').value = '#0a0a14';
+
+  // 1. Draw layer — the interactive canvas
+  const drawId = 'draw_' + (++layerIdN);
+  dynLayers.push({
+    id: drawId, type: 'draw', vis: true,
+    name: 'Donor Canvas',
+    data: Array.from({length: ROWS}, () => Array(COLS).fill(null)),
+  });
+  activeDrawLayer = drawId;
+
+  // 2. Border frame using a draw layer
+  const borderId = 'draw_' + (++layerIdN);
+  const borderData = Array.from({length: ROWS}, () => Array(COLS).fill(null));
+  const borderColor = '#1a2244';
+  // Top & bottom borders
+  for(let c = 0; c < COLS; c++) {
+    borderData[0][c] = borderColor;
+    borderData[ROWS-1][c] = borderColor;
+  }
+  // Left border (6 cols for VU) & right border
+  for(let r = 0; r < ROWS; r++) {
+    for(let c = 0; c < 6; c++) borderData[r][c] = borderColor;
+    borderData[r][COLS-1] = borderColor;
+  }
+  dynLayers.push({
+    id: borderId, type: 'draw', vis: true,
+    name: 'Border', data: borderData,
+  });
+
+  // 3. VU thermometer — in the left border zone
+  const vuId = 'vu_' + (++layerIdN);
+  dynLayers.push({
+    id: vuId, type: 'vu', vis: true, vuMode: 'static',
+    orient: 'vertical', bars: 1,
+    colorMode: 'gradient',
+    monoColor: '#00e5a0',
+    x: 1, y: 1, w: 4, h: 21,
+  });
+  vuStates[vuId] = { levels: [0], peaks: [0], decay: [0] };
+  setTimeout(() => {
+    updateDonVuSelect();
+    const sel = document.getElementById('donVuLink');
+    if(sel) { sel.value = vuId; }
+  }, 100);
+
+  // 4. Scrolling invite text at top
+  dynLayers.push({
+    id: 'txt_' + (++layerIdN), type: 'text', vis: true,
+    text: 'BUY A PIXEL! DRAW YOUR MARK!', color: '#ffd60a',
+    rainbow: true, x: 7, y: 1,
+    size: 'small', scroll: true, scrollSpeed: 1,
+  });
+
+  // 5. Percentage — bottom center area
+  const pctId = 'donpct_' + (++layerIdN);
+  donPctLayerId = pctId;
+  dynLayers.push({
+    id: pctId, type: 'text', vis: true,
+    text: '0%', color: '#00e5a0',
+    rainbow: false, x: 20, y: 16,
+    size: 'small', scroll: false, scrollSpeed: 1,
+    _isDonPct: true, _manualPos: true,
+  });
+  setTimeout(() => {
+    const cb = document.getElementById('donShowPct');
+    if(cb) { cb.checked = true; document.getElementById('donPctOptions').style.display = ''; }
+  }, 100);
+}
+
+// ─── PRESET 4: CELEBRATION ────────────────────────
+// Rainbow-heavy, animated, party mode
+// Great for when the goal is reached or for high-energy events
+function buildCelebrationPreset() {
+  layers.bg.color = '#0a000a';
+  document.getElementById('bgColor').value = '#0a000a';
+
+  // 1. Big rainbow scrolling school name
+  dynLayers.push({
+    id: 'txt_' + (++layerIdN), type: 'text', vis: true,
+    text: 'MARIEMONT WARRIORS', color: '#ffffff',
+    rainbow: true, x: 0, y: 1,
+    size: 'large', scroll: true, scrollSpeed: 1.5,
+  });
+
+  // 2. Percentage — center
+  const pctId = 'donpct_' + (++layerIdN);
+  donPctLayerId = pctId;
+  dynLayers.push({
+    id: pctId, type: 'text', vis: true,
+    text: '0%', color: '#ffd60a',
+    rainbow: false, x: 18, y: 11,
+    size: 'large', scroll: false, scrollSpeed: 1,
+    _isDonPct: true, _manualPos: true,
+  });
+  setTimeout(() => {
+    const cb = document.getElementById('donShowPct');
+    if(cb) { cb.checked = true; document.getElementById('donPctOptions').style.display = ''; }
+  }, 100);
+
+  // 3. Horizontal VU bar — near bottom
+  const vuId = 'vu_' + (++layerIdN);
+  dynLayers.push({
+    id: vuId, type: 'vu', vis: true, vuMode: 'static',
+    orient: 'horizontal', bars: 1,
+    colorMode: 'gradient',
+    monoColor: '#ff44aa',
+    x: 0, y: 20, w: 46, h: 3,
+  });
+  vuStates[vuId] = { levels: [0], peaks: [0], decay: [0] };
+  setTimeout(() => {
+    updateDonVuSelect();
+    const sel = document.getElementById('donVuLink');
+    if(sel) { sel.value = vuId; }
+  }, 100);
+
+  // 4. Warrior logo — bottom left
+  const logo = logoPresets[2]; // Warrior
+  const wPixels = [];
+  for(let r = 0; r < logo.h; r++) {
+    wPixels[r] = [];
+    for(let c = 0; c < logo.w; c++) {
+      wPixels[r][c] = decodeLogoPixel(logo, r, c);
+    }
+  }
+
+  // Draw layer for donor art
+  const drawId = 'draw_' + (++layerIdN);
+  dynLayers.push({
+    id: drawId, type: 'draw', vis: true,
+    name: 'Donor Art',
+    data: Array.from({length: ROWS}, () => Array(COLS).fill(null)),
+  });
+  activeDrawLayer = drawId;
 }
 
 // ═══════════════════════════════════════════
