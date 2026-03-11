@@ -450,9 +450,12 @@ body.fs .fs-exit:hover { border-color:var(--accent); color:var(--accent); }
       <span class="hw-lbl" id="hwLbl">Disconnected</span>
     </div>
     <h1>LED MATRIX STUDIO</h1>
-    <span class="dim">23×46 · WS2811</span>
+    <span class="dim">23×46 · WS2811 · Online</span>
   </div>
   <div class="hdr-right">
+    <span style="font-size:10px;color:var(--text3)">ESP32 IP:</span>
+    <input type="text" id="espIp" placeholder="192.168.x.x" value="" style="width:120px;padding:3px 6px;font-family:monospace;font-size:11px;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:4px;">
+    <button class="show-it-btn" onclick="connectToESP()" style="border-color:var(--accent);color:var(--accent);background:rgba(0,229,160,0.1);">Connect</button>
     <button class="show-it-btn" id="showItBtn" onclick="pushToDisplay()">⚡ SHOW IT!</button>
     <button class="show-it-btn" style="border-color:var(--danger);color:var(--danger);background:rgba(255,68,102,0.1);" onclick="clearDisplay()">✕ CLEAR</button>
     <button class="show-it-btn" style="border-color:var(--text2);color:var(--text2);background:rgba(255,255,255,0.05);" onclick="undo()" title="Undo (Ctrl+Z)">↩ UNDO</button>
@@ -2393,14 +2396,34 @@ function decodeLogoPixel(logo, r, c) {
 // ═══════════════════════════════════════════
 let ws=null, wsOk=false, reconTimer=null, lastSend=0;
 const THROTTLE=33;
+let espHost = localStorage.getItem('espHost') || '';
+
+function connectToESP() {
+  const inp = document.getElementById('espIp');
+  if(inp && inp.value.trim()) {
+    espHost = inp.value.trim();
+    localStorage.setItem('espHost', espHost);
+  }
+  if(!espHost) { alert('Enter the ESP32 IP address'); return; }
+  if(ws) { ws.close(); wsOk=false; }
+  if(reconTimer) { clearTimeout(reconTimer); reconTimer=null; }
+  connectWS();
+}
+
+function disconnectESP() {
+  if(reconTimer) { clearTimeout(reconTimer); reconTimer=null; }
+  if(ws) { ws.close(); ws=null; }
+  wsOk=false;
+  espHost='';
+  updHW('off');
+}
 
 function connectWS(){
-  const host=location.hostname||'192.168.4.1';
-  const port=location.port||'80';
+  if(!espHost) return;
   updHW('try');
-  try{ws=new WebSocket('ws://'+host+':'+port+'/ws');ws.binaryType='arraybuffer';}catch(e){updHW('off');schedRecon();return;}
+  try{ws=new WebSocket('ws://'+espHost+':80/ws');ws.binaryType='arraybuffer';}catch(e){updHW('off');return;}
   ws.onopen=()=>{wsOk=true;updHW('ok');if(reconTimer){clearTimeout(reconTimer);reconTimer=null;}ws.send('info');ws.send('scene_list');};
-  ws.onclose=()=>{wsOk=false;updHW('off');schedRecon();};
+  ws.onclose=()=>{wsOk=false;updHW('off');if(espHost)schedRecon();};
   ws.onerror=()=>{wsOk=false;updHW('off');};
   ws.onmessage=e=>{
     if(typeof e.data==='string'){
@@ -3529,7 +3552,7 @@ function saveSharedScene() {
     bg: layers.bg.color
   };
 
-  const host = location.hostname || '192.168.4.1';
+  const host = espHost || location.hostname || '192.168.4.1';
   const port = location.port || '80';
   fetch('http://'+host+':'+port+'/api/scene/'+slot, {
     method: 'POST',
@@ -3558,7 +3581,7 @@ function loadSharedScene(slot) {
 }
 
 function deleteSharedScene(slot) {
-  const host = location.hostname || '192.168.4.1';
+  const host = espHost || location.hostname || '192.168.4.1';
   const port = location.port || '80';
   fetch('http://'+host+':'+port+'/api/scene/'+slot, { method: 'DELETE' })
     .then(() => {
@@ -3569,7 +3592,7 @@ function deleteSharedScene(slot) {
 
 function requestSharedScenes() {
   // Fetch each scene slot via REST
-  const host = location.hostname || '192.168.4.1';
+  const host = espHost || location.hostname || '192.168.4.1';
   const port = location.port || '80';
   let loaded = 0;
   for(let i = 0; i < NUM_SHARED_SCENES; i++) {
@@ -3636,7 +3659,7 @@ function importAllPresets(e) {
         if(key.startsWith('shared_')) {
           const slot = parseInt(key.split('_')[1]);
           if(slot >= 0 && slot < NUM_SHARED_SCENES) {
-            const host = location.hostname || '192.168.4.1';
+            const host = espHost || location.hostname || '192.168.4.1';
             const port = location.port || '80';
             fetch('http://'+host+':'+port+'/api/scene/'+slot, {
               method: 'POST',
@@ -3812,7 +3835,11 @@ document.addEventListener('keydown', function(e) {
 // ═══════════════════════════════════════════
 addDrawLayer(); // Create the first draw layer
 render();
-connectWS();
+// Don't auto-connect on GitHub Pages — user connects manually via IP field
+document.addEventListener('DOMContentLoaded', () => {
+  const inp = document.getElementById('espIp');
+  if(inp && espHost) inp.value = espHost;
+});
 </script>
 </body>
 </html>
