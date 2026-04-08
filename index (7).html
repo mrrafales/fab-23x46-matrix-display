@@ -1,0 +1,3926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>LED Matrix Studio</title>
+<style>
+:root {
+  --bg:       #080a0f;
+  --panel:    #10131a;
+  --panel2:   #161a24;
+  --input:    #1c2030;
+  --border:   #252a38;
+  --border2:  #353d52;
+  --text:     #dce0eb;
+  --text2:    #7a84a0;
+  --text3:    #4a5268;
+  --accent:   #00e5a0;
+  --accentD:  rgba(0,229,160,0.15);
+  --danger:   #ff4466;
+  --warn:     #ffaa22;
+  --ledOff:   #14171f;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── HEADER ─── */
+.hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.hdr-left { display:flex; align-items:center; gap:10px; }
+.hdr h1 { font-family:monospace; font-size:13px; font-weight:700; color:var(--accent); letter-spacing:1.2px; }
+.hdr .dim { font-family:monospace; font-size:10px; color:var(--text3); }
+
+.hw-status { display:flex; align-items:center; gap:8px; }
+.hw-dot { width:7px; height:7px; border-radius:50%; background:var(--danger); transition:0.3s; }
+.hw-dot.ok { background:var(--accent); box-shadow:0 0 6px var(--accent); }
+.hw-dot.try { background:var(--warn); animation:pulse 1s infinite; }
+@keyframes pulse { 50%{opacity:0.3} }
+.hw-lbl { font-family:monospace; font-size:10px; color:var(--text3); }
+.hw-lbl.ok { color:var(--accent); }
+
+.hdr-right { display:flex; align-items:center; gap:10px; }
+.sync-lbl { font-size:10px; color:var(--text2); display:flex; align-items:center; gap:4px; cursor:pointer; }
+.sync-lbl input { accent-color:var(--accent); }
+
+.coords { font-family:monospace; font-size:10px; color:var(--text3); min-width:70px; text-align:right; }
+
+/* ─── LAYOUT ─── */
+.app { display:flex; flex:1; overflow:hidden; }
+
+/* ─── SIDEBAR ─── */
+.sidebar {
+  width: 290px;
+  min-width: 290px;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  flex-shrink: 0;
+}
+.pnl { border-bottom:2px solid var(--border2); }
+.pnl.pnl-active { border-left:3px solid var(--accent); background:rgba(0,229,160,0.04); }
+.pnl.pnl-active > .pnl-hdr .pnl-title { color:var(--accent); }
+.pnl-hdr {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:10px 14px; cursor:pointer; user-select:none;
+}
+.pnl-hdr:hover { background:var(--panel2); }
+.pnl-title { font-family:monospace; font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text2); }
+.pnl-arrow { font-size:8px; color:var(--text3); transition:transform 0.2s; }
+.pnl-arrow.shut { transform:rotate(-90deg); }
+.pnl-body { padding:6px 14px 14px; display:flex; flex-direction:column; gap:8px; }
+.pnl-body.shut { display:none; }
+
+/* Panel section label (thin colored bar at top of panel header) */
+.pnl-hdr { border-top:1px solid var(--border); }
+
+/* ─── FORM CONTROLS ─── */
+.lbl { font-size:10px; color:var(--text2); font-weight:500; display:block; margin-bottom:2px; }
+.row { display:flex; align-items:center; gap:6px; }
+.row2 { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+
+input[type="text"], input[type="number"], select {
+  background:var(--input); border:1px solid var(--border); border-radius:5px;
+  padding:6px 8px; color:var(--text); font-family:monospace; font-size:11px;
+  width:100%; outline:none;
+}
+input:focus, select:focus { border-color:var(--accent); }
+input[type="number"] { width:56px; text-align:center; -moz-appearance:textfield; }
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance:none; }
+
+input[type="color"] {
+  -webkit-appearance:none; border:1px solid var(--border); border-radius:5px;
+  width:30px; height:28px; padding:2px; background:var(--input); cursor:pointer;
+}
+input[type="color"]::-webkit-color-swatch-wrapper { padding:1px; }
+input[type="color"]::-webkit-color-swatch { border-radius:3px; border:none; }
+
+input[type="range"] {
+  -webkit-appearance:none; width:100%; height:3px; background:var(--border);
+  border-radius:2px; outline:none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance:none; width:12px; height:12px; border-radius:50%;
+  background:var(--accent); cursor:pointer;
+}
+
+select {
+  cursor:pointer; -webkit-appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%237a84a0'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 8px center; padding-right:22px;
+}
+
+.btn {
+  font-family:monospace; font-size:10px; font-weight:600; padding:6px 10px;
+  border:1px solid var(--border); border-radius:5px; background:var(--input);
+  color:var(--text); cursor:pointer; white-space:nowrap; transition:0.15s;
+}
+.btn:hover { border-color:var(--accent); color:var(--accent); }
+.btn.on { background:var(--accent); color:var(--bg); border-color:var(--accent); }
+.btn.danger:hover { border-color:var(--danger); color:var(--danger); }
+.btn-sm { padding:4px 8px; font-size:9px; }
+
+.btn-grp { display:flex; }
+.btn-grp .btn { border-radius:0; border-right-width:0; }
+.btn-grp .btn:first-child { border-radius:5px 0 0 5px; }
+.btn-grp .btn:last-child { border-radius:0 5px 5px 0; border-right-width:1px; }
+
+.swatches { display:flex; gap:3px; flex-wrap:wrap; }
+.sw {
+  width:20px; height:20px; border-radius:3px; border:2px solid transparent;
+  cursor:pointer; transition:0.1s;
+}
+.sw:hover,.sw.on { border-color:#fff; transform:scale(1.15); }
+.sw.rainbow {
+  background: linear-gradient(90deg, #ff0000, #ff8800, #ffff00, #00cc00, #0066ff, #cc00cc, #ff44ff);
+}
+
+.chk { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--text2); cursor:pointer; }
+.chk input { accent-color:var(--accent); }
+
+/* ─── LAYER ITEMS ─── */
+.ly {
+  display:flex; align-items:center; gap:6px; padding:7px 8px; border:1px solid var(--border);
+  border-radius:5px; background:var(--input); font-size:11px; cursor:default;
+  flex-wrap:wrap; transition:border-color 0.15s;
+}
+.ly:hover { border-color:var(--border2); }
+.ly.active-draw { border-color:var(--accent); background:var(--accentD); }
+.ly-icon { font-size:13px; width:18px; text-align:center; flex-shrink:0; }
+.ly-name { flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ly-acts { display:flex; gap:3px; flex-shrink:0; }
+.ly-vis { cursor:pointer; font-size:11px; opacity:0.7; }
+.ly-vis:hover { opacity:1; }
+.ly-vis.off { opacity:0.25; }
+
+/* Inline layer controls */
+.ly-ctrl {
+  width:100%; margin-top:5px; padding-top:6px; border-top:1px solid var(--border);
+  display:flex; flex-direction:column; gap:5px;
+}
+.ly-ctrl .row { font-family:monospace; font-size:10px; color:var(--text2); }
+.vu-val { min-width:28px; text-align:right; color:var(--accent); font-size:10px; font-family:monospace; }
+
+/* ─── BITMAP GRID ─── */
+.bmp-grid {
+  display:grid; grid-template-columns:repeat(4,1fr); gap:4px;
+}
+.bmp-item {
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+  padding:6px 2px; border:1px solid var(--border); border-radius:5px;
+  background:var(--input); cursor:pointer; transition:0.15s;
+}
+.bmp-item:hover { border-color:var(--accent); }
+.bmp-item canvas { border-radius:2px; image-rendering:pixelated; }
+.bmp-item span { font-size:8px; color:var(--text3); text-align:center; }
+
+/* ─── MAIN AREA ─── */
+.main {
+  flex:1; display:flex; align-items:center; justify-content:center;
+  overflow:auto; position:relative;
+}
+.matrix-wrap {
+  background:#060810; border-radius:10px; padding:10px;
+  box-shadow:0 0 0 1px var(--border), 0 4px 24px rgba(0,0,0,0.5);
+}
+.matrix {
+  display:grid; grid-template-columns:repeat(46,12px); gap:2px;
+  cursor:crosshair; touch-action:none; position:relative;
+}
+.led {
+  width:12px; height:12px; border-radius:2px; background:var(--ledOff);
+  transition: background 0.05s;
+}
+.led.on { box-shadow:0 0 3px currentColor, 0 0 8px currentColor; }
+
+/* Shape preview overlay */
+.shape-preview {
+  position:absolute; pointer-events:none; z-index:5;
+  border:1.5px dashed var(--accent); border-radius:2px;
+  background:rgba(0,229,160,0.08);
+}
+
+/* Placement banner */
+.place-banner {
+  display:none; position:absolute; top:0; left:0; right:0; z-index:20;
+  padding:6px 14px; background:var(--accent); color:var(--bg);
+  font-size:11px; font-weight:600; text-align:center; font-family:monospace;
+}
+.place-banner.on { display:block; }
+
+/* ─── FOOTER ─── */
+.ftr {
+  padding:5px 14px; border-top:1px solid var(--border); background:var(--panel);
+  display:flex; justify-content:space-between; font-family:monospace; font-size:9px; color:var(--text3);
+  flex-shrink:0;
+}
+
+/* ─── RESPONSIVE ─── */
+@media(max-width:900px) {
+  .app { flex-direction:column; }
+  .sidebar { width:100%; min-width:unset; max-height:40vh; border-right:none; border-bottom:1px solid var(--border); }
+  .matrix { grid-template-columns:repeat(46,7px); gap:1px; }
+  .led { width:7px; height:7px; }
+}
+
+/* ─── FULLSCREEN MODE ─── */
+body.fs .hdr, body.fs .sidebar, body.fs .ftr { display:none !important; }
+body.fs .main { background:#000; }
+body.fs .matrix-wrap { background:#000; box-shadow:none; border-radius:0; padding:0; }
+body.fs .matrix { grid-template-columns:repeat(46,var(--fs-cell)); gap:var(--fs-gap); }
+body.fs .led { width:var(--fs-cell); height:var(--fs-cell); border-radius:3px; }
+body.fs .fs-exit {
+  display:flex; position:fixed; top:12px; right:12px; z-index:200;
+  font-family:monospace; font-size:11px; font-weight:700; padding:8px 14px;
+  border:2px solid var(--text3); border-radius:6px; background:rgba(0,0,0,0.7);
+  color:var(--text2); cursor:pointer; backdrop-filter:blur(4px); gap:6px; align-items:center;
+}
+body.fs .fs-exit:hover { border-color:var(--accent); color:var(--accent); }
+.fs-exit { display:none; }
+
+/* ─── MOVE BUTTONS ─── */
+.ly-move {
+  display:flex; gap:1px; align-items:center;
+}
+.ly-move button {
+  font-size:10px; padding:2px 5px; border:1px solid var(--border); border-radius:3px;
+  background:var(--panel); color:var(--text2); cursor:pointer; font-family:monospace;
+  line-height:1;
+}
+.ly-move button:hover { border-color:var(--accent); color:var(--accent); }
+.stencil-row { display:flex; align-items:center; gap:6px; font-size:10px; padding:3px 4px; border-radius:4px; background:rgba(255,255,255,0.03); }
+.stencil-row label { display:flex; align-items:center; gap:5px; cursor:pointer; flex:1; }
+.stencil-row input[type=checkbox] { accent-color:var(--accent); }
+.stencil-row .st-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.stencil-row .st-swatch { width:12px; height:12px; border-radius:2px; border:1px solid rgba(255,255,255,0.15); flex-shrink:0; }
+.stencil-row.active { background:rgba(255,255,255,0.08); }
+.stencil-row { display:flex; align-items:center; gap:6px; font-size:10px; padding:3px 4px; border-radius:4px; background:rgba(255,255,255,0.03); }
+.stencil-row label { display:flex; align-items:center; gap:5px; cursor:pointer; flex:1; }
+.stencil-row input[type=checkbox] { accent-color:var(--accent); }
+.stencil-row .st-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.stencil-row .st-swatch { width:12px; height:12px; border-radius:2px; border:1px solid rgba(255,255,255,0.15); flex-shrink:0; }
+.stencil-row.active { background:rgba(255,255,255,0.08); }
+
+/* ─── SHOW IT BUTTON ─── */
+.show-it-btn {
+  font-family:monospace; font-size:12px; font-weight:800; letter-spacing:1px;
+  padding:8px 18px; border:2px solid var(--accent); border-radius:6px;
+  background:var(--accentD); color:var(--accent); cursor:pointer;
+  transition:0.2s; text-transform:uppercase;
+}
+.show-it-btn:hover { background:var(--accent); color:var(--bg); }
+.show-it-btn:active { transform:scale(0.96); }
+.show-it-btn.pushed { background:var(--accent); color:var(--bg); animation:flashPush 0.3s; }
+@keyframes flashPush { 0%{transform:scale(1)} 50%{transform:scale(0.94)} 100%{transform:scale(1)} }
+
+/* ─── BRUSH SIZE PREVIEW ─── */
+.brush-prev { display:flex; align-items:center; gap:4px; }
+.brush-dot { border-radius:2px; background:var(--accent); transition:0.15s; }
+
+/* ─── FUNDRAISER ─── */
+.fund-stats {
+  display:grid; grid-template-columns:1fr 1fr; gap:6px;
+}
+.fund-stat {
+  background:var(--input); border:1px solid var(--border); border-radius:5px;
+  padding:8px; text-align:center;
+}
+.fund-stat.wide { grid-column:1/-1; }
+.fund-stat-val {
+  font-family:monospace; font-size:16px; font-weight:700; color:var(--accent);
+  display:block; margin-bottom:2px;
+}
+.fund-stat-val.big { font-size:28px; }
+.fund-stat-lbl {
+  font-size:9px; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px;
+}
+.fund-ly-list {
+  display:flex; flex-direction:column; gap:4px; max-height:120px; overflow-y:auto;
+}
+.fund-ly-item {
+  display:flex; align-items:center; gap:6px; font-size:10px; color:var(--text2);
+}
+.fund-ly-item input { accent-color:var(--accent); }
+.fund-ly-item .fund-px { margin-left:auto; font-family:monospace; color:var(--text3); font-size:9px; }
+
+/* Modal tabs */
+.fund-tabs {
+  display:flex; border-bottom:2px solid var(--border2); margin:-18px -18px 0; padding:0 10px;
+}
+.fund-tab {
+  font-family:monospace; font-size:10px; font-weight:600; letter-spacing:0.5px;
+  padding:10px 14px; color:var(--text3); cursor:pointer; border:none; background:none;
+  border-bottom:2px solid transparent; margin-bottom:-2px; transition:0.15s;
+}
+.fund-tab:hover { color:var(--text); }
+.fund-tab.on { color:var(--accent); border-bottom-color:var(--accent); }
+.fund-pane { display:none; flex-direction:column; gap:12px; }
+.fund-pane.on { display:flex; }
+
+/* Donation quick-tap buttons */
+.don-grid {
+  display:grid; grid-template-columns:1fr 1fr; gap:6px;
+}
+.don-btn {
+  font-family:monospace; font-size:14px; font-weight:700; padding:14px 8px;
+  border:2px solid var(--accent); border-radius:8px; background:var(--accentD);
+  color:var(--accent); cursor:pointer; transition:0.15s; text-align:center;
+}
+.don-btn:hover { background:var(--accent); color:var(--bg); }
+.don-btn:active { transform:scale(0.95); }
+.don-btn.flash { animation:donFlash 0.3s; }
+@keyframes donFlash { 0%{transform:scale(1)} 50%{transform:scale(0.92);background:var(--accent);color:var(--bg)} 100%{transform:scale(1)} }
+.don-undo {
+  font-family:monospace; font-size:10px; padding:6px; border:1px solid var(--border);
+  border-radius:5px; background:var(--input); color:var(--text2); cursor:pointer;
+}
+.don-undo:hover { border-color:var(--danger); color:var(--danger); }
+
+/* Progress bar */
+.progress-wrap {
+  background:var(--input); border:1px solid var(--border); border-radius:6px;
+  height:24px; position:relative; overflow:hidden;
+}
+.progress-fill {
+  height:100%; background:linear-gradient(90deg, var(--accent), #00ff88);
+  border-radius:6px; transition:width 0.4s ease;
+}
+.progress-lbl {
+  position:absolute; top:0; left:0; right:0; bottom:0;
+  display:flex; align-items:center; justify-content:center;
+  font-family:monospace; font-size:11px; font-weight:700; color:var(--text);
+  text-shadow:0 0 4px rgba(0,0,0,0.8);
+}
+
+/* Custom amount row */
+.don-custom-row {
+  display:flex; gap:6px; align-items:center;
+}
+.don-custom-row input {
+  flex:1; font-size:14px; padding:8px;
+}
+.don-custom-row button {
+  font-family:monospace; font-size:11px; font-weight:700; padding:8px 14px;
+  border:2px solid var(--accent); border-radius:6px; background:var(--accentD);
+  color:var(--accent); cursor:pointer; white-space:nowrap;
+}
+.don-custom-row button:hover { background:var(--accent); color:var(--bg); }
+
+/* VU link */
+.vu-link-row {
+  display:flex; align-items:center; gap:8px; font-size:11px; color:var(--text2);
+}
+.vu-link-row select { flex:1; font-size:11px; }
+
+/* ─── LITE BRITE MODE ─── */
+
+/* ─── MODAL ─── */
+.modal-overlay {
+  position:fixed; top:0; left:0; right:0; bottom:0; z-index:100;
+  pointer-events:none;
+}
+.modal {
+  background:var(--panel); border:1px solid var(--border2); border-radius:10px;
+  width:100%; max-width:480px; max-height:80vh; overflow-y:auto;
+  box-shadow:0 8px 40px rgba(0,0,0,0.6);
+  pointer-events:auto; position:absolute;
+}
+.modal-hdr {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 18px; border-bottom:2px solid var(--border2);
+  cursor:grab; user-select:none;
+}
+.modal-hdr:active { cursor:grabbing; }
+.modal-title {
+  font-family:monospace; font-size:13px; font-weight:700; color:var(--accent); letter-spacing:1px;
+}
+.modal-close {
+  background:none; border:none; color:var(--text3); font-size:16px; cursor:pointer;
+  padding:4px 8px; border-radius:4px; transition:0.15s;
+}
+.modal-close:hover { background:var(--panel2); color:var(--danger); }
+.modal-body {
+  padding:18px; display:flex; flex-direction:column; gap:14px;
+}
+
+/* ─── LITE BRITE MODE ─── */
+.lb-btn {
+  font-family:monospace; font-size:10px; font-weight:700; padding:6px 12px;
+  border:2px solid var(--warn); border-radius:6px; background:rgba(255,170,34,0.1);
+  color:var(--warn); cursor:pointer; transition:0.2s; letter-spacing:0.5px;
+}
+.lb-btn:hover { background:rgba(255,170,34,0.2); }
+.lb-btn.on { background:var(--warn); color:var(--bg); }
+.lb-swatches { display:flex; gap:4px; flex-wrap:wrap; }
+.lb-sw {
+  width:26px; height:26px; border-radius:4px; border:3px solid transparent;
+  cursor:pointer; transition:0.15s;
+}
+.lb-sw:hover,.lb-sw.on { border-color:#fff; transform:scale(1.15); box-shadow:0 0 8px currentColor; }
+</style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<div class="hdr">
+  <div class="hdr-left">
+    <div class="hw-status">
+      <div class="hw-dot" id="hwDot"></div>
+      <span class="hw-lbl" id="hwLbl">Disconnected</span>
+    </div>
+    <h1>LED MATRIX STUDIO</h1>
+    <span class="dim">23×46 · WS2811</span>
+  </div>
+  <div class="hdr-right">
+    <button class="show-it-btn" id="showItBtn" onclick="pushToDisplay()">⚡ SHOW IT!</button>
+    <button class="show-it-btn" style="border-color:var(--danger);color:var(--danger);background:rgba(255,68,102,0.1);" onclick="clearDisplay()">✕ CLEAR</button>
+    <button class="show-it-btn" style="border-color:var(--text2);color:var(--text2);background:rgba(255,255,255,0.05);" onclick="undo()" title="Undo (Ctrl+Z)">↩ UNDO</button>
+    <button class="lb-btn" id="lbBtn" onclick="toggleLiteBrite()">💡 LITE BRITE</button>
+    <button class="show-it-btn" style="border-color:var(--text3);color:var(--text3);background:rgba(255,255,255,0.05);" onclick="toggleFullscreen()">⛶ FULL</button>
+    <label class="sync-lbl"><input type="checkbox" id="autoSync" checked> Auto-Sync</label>
+    <label class="sync-lbl">Bright <input type="range" min="0" max="191" value="191" id="hwBright" style="width:60px" oninput="sendBrightness(this.value)"></label>
+    <span class="coords" id="coords">—</span>
+  </div>
+</div>
+
+<!-- ═══ APP ═══ -->
+<div class="app">
+
+<!-- ═══ SIDEBAR ═══ -->
+<div class="sidebar">
+
+  <!-- TOOLS -->
+  <div class="pnl pnl-active" id="pnlDraw">
+    <div class="pnl-hdr" onclick="togPnl(this)">
+      <span class="pnl-title">🖌 Drawing Tools</span><span class="pnl-arrow">▼</span>
+    </div>
+    <div class="pnl-body">
+      <div class="btn-grp" id="toolBtns">
+        <button class="btn on" onclick="setTool('draw',this)">Draw</button>
+        <button class="btn" onclick="setTool('erase',this)">Erase</button>
+        <button class="btn" onclick="setTool('fill',this)">Fill</button>
+        <button class="btn" onclick="setTool('line',this)">Line</button>
+        <button class="btn" onclick="setTool('rect',this)">Rect</button>
+        <button class="btn" onclick="setTool('circle',this)">Circle</button>
+      </div>
+      <div class="row" style="justify-content:space-between">
+        <div class="row">
+          <span class="lbl" style="margin:0">Brush</span>
+          <div class="btn-grp">
+            <button class="btn btn-sm on" onclick="setBrush(1,this)">1px</button>
+            <button class="btn btn-sm" onclick="setBrush(2,this)">2px</button>
+            <button class="btn btn-sm" onclick="setBrush(3,this)">3px</button>
+          </div>
+        </div>
+      </div>
+      <div>
+        <span class="lbl">Color</span>
+        <div class="row" id="normalColorRow">
+          <input type="color" id="brushColor" value="#ff0000">
+          <div class="swatches">
+            <div class="sw on" style="background:#ff0000" onclick="pickSw('#ff0000',this)"></div>
+            <div class="sw" style="background:#ff8800" onclick="pickSw('#ff8800',this)"></div>
+            <div class="sw" style="background:#ffdd00" onclick="pickSw('#ffdd00',this)"></div>
+            <div class="sw" style="background:#00cc00" onclick="pickSw('#00cc00',this)"></div>
+            <div class="sw" style="background:#0066ff" onclick="pickSw('#0066ff',this)"></div>
+            <div class="sw" style="background:#cc00cc" onclick="pickSw('#cc00cc',this)"></div>
+            <div class="sw" style="background:#ff44ff" onclick="pickSw('#ff44ff',this)"></div>
+            <div class="sw" style="background:#ffffff" onclick="pickSw('#ffffff',this)"></div>
+          </div>
+        </div>
+        <div class="lb-swatches" id="lbColorRow" style="display:none">
+          <div class="lb-sw on" style="background:#ff0000;color:#ff0000" onclick="pickLb('#ff0000',this)"></div>
+          <div class="lb-sw" style="background:#ff8800;color:#ff8800" onclick="pickLb('#ff8800',this)"></div>
+          <div class="lb-sw" style="background:#ffdd00;color:#ffdd00" onclick="pickLb('#ffdd00',this)"></div>
+          <div class="lb-sw" style="background:#00cc00;color:#00cc00" onclick="pickLb('#00cc00',this)"></div>
+          <div class="lb-sw" style="background:#0066ff;color:#0066ff" onclick="pickLb('#0066ff',this)"></div>
+          <div class="lb-sw" style="background:#cc00cc;color:#cc00cc" onclick="pickLb('#cc00cc',this)"></div>
+          <div class="lb-sw" style="background:#ffffff;color:#ffffff" onclick="pickLb('#ffffff',this)"></div>
+        </div>
+      </div>
+      <div class="row2">
+        <button class="btn" onclick="addDrawLayer()" style="width:100%">+ New Draw Layer</button>
+        <button class="btn danger" onclick="clearMatrix()" style="width:100%">✕ Clear All</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TEXT -->
+  <div class="pnl" id="pnlText">
+    <div class="pnl-hdr" onclick="togPnl(this)">
+      <span class="pnl-title">✎ Add Text</span><span class="pnl-arrow">▼</span>
+    </div>
+    <div class="pnl-body">
+      <input type="text" id="txtInput" value="HELLO" placeholder="Enter text..." maxlength="60">
+      <div style="font-size:8px;color:var(--text3);margin:-2px 0 4px;line-height:1.3">Variables: <b>{pct}</b> reached · <b>{left}</b> to go · <b>{raised}</b> · <b>{goal}</b> · <b>{remaining}</b></div>
+      <div class="row2">
+        <div>
+          <span class="lbl">Color</span>
+          <div class="row">
+            <input type="color" id="txtColor" value="#ff4466">
+            <div class="sw rainbow" onclick="pickTxtRainbow(this)" title="Rainbow" style="width:24px;height:24px;flex-shrink:0;"></div>
+          </div>
+        </div>
+        <div>
+          <span class="lbl">Size</span>
+          <select id="txtSize">
+            <option value="small">Small (5px)</option>
+            <option value="medium" selected>Medium (7px)</option>
+            <option value="large">Large (9px)</option>
+          </select>
+        </div>
+      </div>
+      <label class="chk"><input type="checkbox" id="txtScroll"> Scroll text</label>
+      <div id="txtSpeedWrap" style="display:none">
+        <span class="lbl">Scroll Speed</span>
+        <input type="range" min="1" max="5" value="3" id="txtSpeed">
+      </div>
+      <button class="btn" onclick="startPlacement('text')" id="txtPlaceBtn" style="width:100%">📍 Place Text on Matrix</button>
+    </div>
+  </div>
+
+  <!-- VU METER -->
+  <div class="pnl" id="pnlVu">
+    <div class="pnl-hdr" onclick="togPnl(this)">
+      <span class="pnl-title">📊 VU Meter</span><span class="pnl-arrow">▼</span>
+    </div>
+    <div class="pnl-body">
+      <div class="row2">
+        <div>
+          <span class="lbl">Mode</span>
+          <div class="btn-grp">
+            <button class="btn on" onclick="vuCfg.mode='animated';togBtnGrp(this)">Animated</button>
+            <button class="btn" onclick="vuCfg.mode='mic';togBtnGrp(this)">🎤 Mic</button>
+            <button class="btn" onclick="vuCfg.mode='static';togBtnGrp(this)">Static</button>
+          </div>
+        </div>
+        <div>
+          <span class="lbl">Orientation</span>
+          <div class="btn-grp">
+            <button class="btn on" onclick="vuCfg.orient='vertical';togBtnGrp(this)">Vert</button>
+            <button class="btn" onclick="vuCfg.orient='horizontal';togBtnGrp(this)">Horiz</button>
+          </div>
+        </div>
+      </div>
+      <div>
+        <span class="lbl">Color</span>
+        <select id="vuColorMode" onchange="vuCfg.colorMode=this.value">
+          <option value="classic">Classic (Green→Red)</option>
+          <option value="cool">Cool (Cyan→Blue)</option>
+          <option value="warm">Warm (Yellow→Red)</option>
+          <option value="neon">Neon (Magenta→Cyan)</option>
+          <option value="rainbow">Rainbow (Red→Purple)</option>
+          <option value="mono">Mono Color</option>
+        </select>
+      </div>
+      <div id="vuMonoWrap" style="display:none">
+        <span class="lbl">Mono Color</span>
+        <input type="color" id="vuMonoColor" value="#00e5a0">
+      </div>
+      <div>
+        <span class="lbl">🎤 Mic Sensitivity: <span id="micSensVal">100%</span></span>
+        <input type="range" min="10" max="300" value="100" id="micSensSlider" oninput="micGain=this.value/100;document.getElementById('micSensVal').textContent=this.value+'%'" style="width:100%">
+      </div>
+      <button class="btn" onclick="startPlacement('vu')" id="vuPlaceBtn" style="width:100%">📍 Drag VU Area on Matrix</button>
+    </div>
+  </div>
+
+  <!-- BITMAPS -->
+  <div class="pnl" id="pnlBitmap">
+    <div class="pnl-hdr" onclick="togPnl(this)">
+      <span class="pnl-title">⬡ Bitmap Presets</span><span class="pnl-arrow">▼</span>
+    </div>
+    <div class="pnl-body">
+      <div>
+        <span class="lbl">Bitmap Color</span>
+        <input type="color" id="bmpColor" value="#ff0000">
+      </div>
+      <div class="bmp-grid" id="bmpGrid"></div>
+    </div>
+  </div>
+
+  <!-- LOGO PRESETS -->
+  <div class="pnl" id="pnlLogo">
+    <div class="pnl-hdr" onclick="togPnl(this)">
+      <span class="pnl-title">🏫 Logo Presets</span><span class="pnl-arrow">▼</span>
+    </div>
+    <div class="pnl-body">
+      <div class="bmp-grid" id="logoGrid"></div>
+      <div style="font-size:9px;color:var(--text3)">Click a logo, then drag on the matrix to place &amp; size it</div>
+    </div>
+  </div>
+
+  <!-- IMAGE UPLOAD -->
+  <div class="pnl" id="pnlImage">
+    <div class="pnl-hdr" onclick="togPnl(this)">
+      <span class="pnl-title">🖼 Image Upload</span><span class="pnl-arrow">▼</span>
+    </div>
+    <div class="pnl-body">
+      <input type="file" id="imgFile" accept="image/*" style="display:none" onchange="handleImgUpload(event)">
+      <button class="btn" onclick="document.getElementById('imgFile').click()" style="width:100%">Upload Image</button>
+      <div>
+        <span class="lbl">Resize</span>
+        <select id="imgResize">
+          <option value="fit">Fit to Matrix</option>
+          <option value="stretch">Stretch</option>
+          <option value="original">Original Size</option>
+        </select>
+      </div>
+      <button class="btn" onclick="startPlacement('image')" id="imgPlaceBtn" style="width:100%" disabled>📍 Place Image on Matrix</button>
+    </div>
+  </div>
+
+  <!-- PRESET SCENES -->
+  <div class="pnl">
+    <div class="pnl-hdr" onclick="togPnl(this)">
+      <span class="pnl-title">🎬 Preset Scenes</span><span class="pnl-arrow">▼</span>
+    </div>
+    <div class="pnl-body">
+      <div style="font-size:9px;color:var(--text3);margin-bottom:4px">Save & recall complete layouts instantly</div>
+
+      <!-- Shared scenes (synced to ESP32) -->
+      <div style="font-size:9px;font-weight:700;color:var(--accent);margin:6px 0 3px;letter-spacing:0.5px">📡 SHARED (all devices)</div>
+      <div id="sharedSceneSlots" style="display:flex;flex-direction:column;gap:4px"></div>
+      <div class="row2" style="margin-top:4px">
+        <button class="btn" onclick="saveSharedScene()">💾 Save Shared</button>
+        <select id="sharedSceneTarget" style="font-size:10px"></select>
+      </div>
+
+      <!-- Local scenes -->
+      <div style="font-size:9px;font-weight:700;color:var(--text2);margin:8px 0 3px;letter-spacing:0.5px">💻 LOCAL (this device only)</div>
+      <div id="sceneSlots" style="display:flex;flex-direction:column;gap:4px"></div>
+      <div class="row2" style="margin-top:4px">
+        <button class="btn" onclick="saveScene()">💾 Save to Slot</button>
+        <select id="sceneTarget" style="font-size:10px"></select>
+      </div>
+
+      <!-- Export/Import all presets -->
+      <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
+        <div style="font-size:8px;color:var(--text3);margin-bottom:3px">Share presets between devices:</div>
+        <div class="row2">
+          <button class="btn" onclick="exportAllPresets()" style="flex:1;font-size:9px">⬇ Export Presets</button>
+          <button class="btn" onclick="document.getElementById('presetImportFile').click()" style="flex:1;font-size:9px">⬆ Import Presets</button>
+        </div>
+        <input type="file" id="presetImportFile" accept=".json" style="display:none" onchange="importAllPresets(event)">
+      </div>
+    </div>
+  </div>
+
+  <!-- STENCIL MODE -->
+  <div class="pnl">
+    <div class="pnl-hdr" onclick="togPnl(this)">
+      <span class="pnl-title">⬡ Stencil Mode</span><span class="pnl-arrow">▼</span>
+    </div>
+    <div class="pnl-body">
+      <div style="font-size:9px;color:var(--text3);margin-bottom:6px">Convert colored pixels to white for peg placement guides. Original colors are preserved — toggle on/off anytime.</div>
+      <div id="stencilLayers" style="display:flex;flex-direction:column;gap:3px"></div>
+      <div class="row2" style="margin-top:6px;gap:4px">
+        <button class="btn" onclick="stencilAll(true)" style="flex:1">⬜ All White</button>
+        <button class="btn" onclick="stencilAll(false)" style="flex:1">🎨 All Color</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SAVE/LOAD -->
+  <div class="pnl">
+    <div class="pnl-hdr" onclick="togPnl(this)">
+      <span class="pnl-title">💾 Save / Load</span><span class="pnl-arrow">▼</span>
+    </div>
+    <div class="pnl-body">
+      <div class="row2">
+        <button class="btn" onclick="saveDesign()" style="width:100%">💾 Save</button>
+        <button class="btn" onclick="loadDesign()" style="width:100%">📂 Load</button>
+      </div>
+      <div class="row2">
+        <button class="btn" onclick="exportJSON()" style="width:100%">⬇ Export JSON</button>
+        <button class="btn" onclick="document.getElementById('importFile').click()" style="width:100%">⬆ Import JSON</button>
+      </div>
+      <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(event)">
+      <div id="saveStatus" style="font-size:10px;color:var(--text3);min-height:14px;"></div>
+    </div>
+  </div>
+
+  <!-- FUNDRAISER (opens modal) -->
+  <div class="pnl">
+    <div class="pnl-hdr" style="cursor:pointer" onclick="toggleFundModal()">
+      <span class="pnl-title">🎯 Fundraiser</span><span style="font-size:9px;color:var(--text3)">↗ Open</span>
+    </div>
+  </div>
+
+  <!-- LAYERS -->
+  <div class="pnl">
+    <div class="pnl-hdr" onclick="togPnl(this)">
+      <span class="pnl-title">◫ Layers</span><span class="pnl-arrow">▼</span>
+    </div>
+    <div class="pnl-body" id="lyList">
+      <div class="ly" data-ly="bg" style="opacity:0.7">
+        <span class="ly-icon">🎨</span>
+        <span class="ly-name">Background</span>
+        <div class="ly-acts">
+          <input type="color" id="bgColor" value="#000000" onchange="setBg(this.value)" style="width:22px;height:20px;padding:1px;border-radius:3px;">
+          <div class="ly-vis" onclick="togVis('bg',this)">👁</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══ MAIN AREA ═══ -->
+<div class="main" id="mainArea">
+  <div class="place-banner" id="placeBanner"></div>
+  <button class="fs-exit" onclick="toggleFullscreen()">✕ Exit Fullscreen</button>
+  <div class="matrix-wrap" id="matrixWrap" style="transform-origin:center center;">
+    <div class="matrix" id="grid"></div>
+  </div>
+</div>
+
+</div>
+
+<!-- ═══ FOOTER ═══ -->
+<div class="ftr">
+  <span id="fpsDisp">FPS: —</span>
+  <span>23×46 · 1058 LEDs · WS2811 12V · 4-Section</span>
+  <span id="heapDisp"></span>
+</div>
+
+<!-- ═══ FUNDRAISER MODAL ═══ -->
+<div class="modal-overlay" id="fundModal" style="display:none">
+  <div class="modal" id="fundModalBox" style="top:50px;right:20px;">
+    <div class="modal-hdr" id="fundModalDrag">
+      <span class="modal-title">🎯 Fundraiser Dashboard</span>
+      <button class="modal-close" onclick="toggleFundModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Quick Setup Presets -->
+      <div style="margin-bottom:8px;padding:8px;background:rgba(0,229,160,0.05);border:1px solid rgba(0,229,160,0.15);border-radius:6px;">
+        <div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:6px;letter-spacing:0.5px">⚡ QUICK SETUP — Event Layouts</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">
+          <button class="btn" onclick="loadEventPreset('thermometer')" style="flex:1;min-width:100px;font-size:9px">🌡 Thermometer</button>
+          <button class="btn" onclick="loadEventPreset('scoreboard')" style="flex:1;min-width:100px;font-size:9px">📊 Scoreboard</button>
+          <button class="btn" onclick="loadEventPreset('interactive')" style="flex:1;min-width:100px;font-size:9px">🎨 Interactive</button>
+          <button class="btn" onclick="loadEventPreset('celebration')" style="flex:1;min-width:100px;font-size:9px">🎉 Celebration</button>
+        </div>
+        <div style="font-size:8px;color:var(--text3);margin-top:4px">Loads a complete layout. Your current design will be saved to undo.</div>
+      </div>
+
+      <!-- Goal (shared across all tabs) -->
+      <div>
+        <span class="lbl">Fundraiser Goal ($)</span>
+        <input type="number" id="fundGoal" value="1000" min="1" step="100" style="width:100%;text-align:left;font-size:14px;padding:8px" oninput="updateAllFundTabs()">
+      </div>
+
+      <!-- Tabs -->
+      <div class="fund-tabs">
+        <button class="fund-tab on" onclick="switchFundTab('calc',this)">Calculator</button>
+        <button class="fund-tab" onclick="switchFundTab('pricing',this)">Pixel Pricing</button>
+        <button class="fund-tab" onclick="switchFundTab('tracker',this)">Donation Tracker</button>
+      </div>
+
+      <!-- TAB 1: CALCULATOR (Function 1) -->
+      <div class="fund-pane on" id="fundPaneCalc">
+        <div>
+          <span class="lbl">Include Layers</span>
+          <div class="fund-ly-list" id="fundLyList">
+            <div style="font-size:10px;color:var(--text3)">Add layers to see them here</div>
+          </div>
+        </div>
+        <div class="fund-stats">
+          <div class="fund-stat">
+            <span class="fund-stat-val" id="fundTotalPx">0</span>
+            <span class="fund-stat-lbl">Total Pixels</span>
+          </div>
+          <div class="fund-stat">
+            <span class="fund-stat-val" id="fundPerPx">$0.00</span>
+            <span class="fund-stat-lbl">Per Pixel</span>
+          </div>
+          <div class="fund-stat">
+            <span class="fund-stat-val" id="fundFilledPx">0</span>
+            <span class="fund-stat-lbl">Filled Pixels</span>
+          </div>
+          <div class="fund-stat">
+            <span class="fund-stat-val" id="fundRaised">$0.00</span>
+            <span class="fund-stat-lbl">Value Filled</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: PIXEL PRICING (Function 2) -->
+      <div class="fund-pane" id="fundPanePricing">
+        <div class="row2">
+          <div>
+            <span class="lbl">Price ($)</span>
+            <input type="number" id="pxPrice" value="100" min="1" step="10" style="width:100%;font-size:14px;padding:8px" oninput="updatePricing()">
+          </div>
+          <div>
+            <span class="lbl">Per # of Pixels</span>
+            <input type="number" id="pxGroup" value="1" min="1" step="1" style="width:100%;font-size:14px;padding:8px" oninput="updatePricing()">
+          </div>
+        </div>
+        <div class="fund-stats">
+          <div class="fund-stat">
+            <span class="fund-stat-val" id="pricePerPx">$100.00</span>
+            <span class="fund-stat-lbl">Effective $/Pixel</span>
+          </div>
+          <div class="fund-stat">
+            <span class="fund-stat-val" id="pxNeeded">10</span>
+            <span class="fund-stat-lbl">Pixels Needed</span>
+          </div>
+          <div class="fund-stat">
+            <span class="fund-stat-val" id="groupsNeeded">10</span>
+            <span class="fund-stat-lbl">Groups Needed</span>
+          </div>
+          <div class="fund-stat">
+            <span class="fund-stat-val" id="pxAvail">1,058</span>
+            <span class="fund-stat-lbl">Total on Matrix</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: DONATION TRACKER (Function 3) -->
+      <div class="fund-pane" id="fundPaneTracker">
+        <!-- Progress bar -->
+        <div class="progress-wrap">
+          <div class="progress-fill" id="donProgress" style="width:0%"></div>
+          <div class="progress-lbl" id="donProgressLbl">0%</div>
+        </div>
+        <div class="fund-stats">
+          <div class="fund-stat wide">
+            <span class="fund-stat-val big" id="donTotal">$0.00</span>
+            <span class="fund-stat-lbl">Total Donations</span>
+          </div>
+          <div class="fund-stat">
+            <span class="fund-stat-val" id="donRemaining">$1,000.00</span>
+            <span class="fund-stat-lbl">Still Needed</span>
+          </div>
+          <div class="fund-stat">
+            <span class="fund-stat-val" id="donCount">0</span>
+            <span class="fund-stat-lbl">Donations</span>
+          </div>
+        </div>
+
+        <!-- Quick-tap donation buttons -->
+        <div>
+          <span class="lbl">Quick Add Donation</span>
+          <div class="don-grid">
+            <button class="don-btn" onclick="addDonation(25,this)">+ $25</button>
+            <button class="don-btn" onclick="addDonation(50,this)">+ $50</button>
+            <button class="don-btn" onclick="addDonation(100,this)">+ $100</button>
+            <button class="don-btn" onclick="addDonation(500,this)">+ $500</button>
+          </div>
+        </div>
+
+        <!-- Custom amount -->
+        <div>
+          <span class="lbl">Custom Amount</span>
+          <div class="don-custom-row">
+            <span style="color:var(--text2);font-size:14px;font-weight:700">$</span>
+            <input type="number" id="donCustomAmt" value="" min="1" step="1" placeholder="Enter amount...">
+            <button onclick="addCustomDonation()">+ ADD</button>
+          </div>
+        </div>
+
+        <!-- Manual override -->
+        <div>
+          <span class="lbl">Set Total Manually</span>
+          <div class="don-custom-row">
+            <span style="color:var(--text2);font-size:14px;font-weight:700">$</span>
+            <input type="number" id="donManualTotal" value="" min="0" step="1" placeholder="Override total...">
+            <button onclick="setDonationTotal()">SET</button>
+          </div>
+        </div>
+
+        <!-- Undo + Reset row -->
+        <div style="display:flex;gap:6px">
+          <button class="don-undo" onclick="undoDonation()" style="flex:1">↩ Undo Last</button>
+          <button class="don-undo" onclick="resetDonations()" style="flex:1;border-color:var(--danger);color:var(--danger)">✕ Reset All</button>
+        </div>
+
+        <!-- Link to VU meter -->
+        <div class="vu-link-row">
+          <span>🔗 Drive VU Meter:</span>
+          <select id="donVuLink" onchange="updateDonationTracker()">
+            <option value="">None</option>
+          </select>
+        </div>
+
+        <!-- Show % on LED display -->
+        <div style="margin-top:4px;padding:6px 8px;background:rgba(255,255,255,0.03);border-radius:6px;">
+          <label class="chk" style="font-size:11px;margin-bottom:4px">
+            <input type="checkbox" id="donShowPct" onchange="toggleDonPctDisplay(this.checked)">
+            Show % on LED Display
+          </label>
+          <div id="donPctOptions" style="display:none;margin-top:6px">
+            <div class="row2" style="gap:6px">
+              <div>
+                <span class="lbl">Color</span>
+                <input type="color" id="donPctColor" value="#00e5a0" onchange="updateDonPctLayer()" style="width:100%;height:24px">
+              </div>
+              <div>
+                <span class="lbl">Size</span>
+                <select id="donPctSize" onchange="updateDonPctLayer()" style="width:100%;font-size:10px;padding:4px">
+                  <option value="small">Small</option>
+                  <option value="medium" selected>Medium</option>
+                  <option value="large">Large</option>
+                </select>
+              </div>
+            </div>
+            <label class="chk" style="font-size:10px;margin-top:4px">
+              <input type="checkbox" id="donPctScroll" onchange="updateDonPctLayer()">
+              Scroll text
+            </label>
+            <button class="btn" onclick="repositionDonPct()" style="width:100%;margin-top:4px;font-size:9px">📍 Click to Place on Grid</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════
+const ROWS = 23, COLS = 46;
+let tool = 'draw', isDrawing = false, layerIdN = 0;
+let shapeStart = null; // {r,c} for line/rect/circle start
+let shapeEnd = null;   // {r,c} tracks current drag position for live preview
+let brushSize = 1;
+
+// Undo/Redo (stores {layerId, data} snapshots)
+const undoStack = [];
+const redoStack = [];
+const MAX_UNDO = 20;
+
+const layers = {
+  bg: { vis:true, color:null }
+};
+const dynLayers = [];
+let activeDrawLayer = null; // ID of the currently selected draw layer
+
+// VU config state
+const vuCfg = { mode:'animated', orient:'vertical', colorMode:'classic', bars:1 };
+
+// Placement
+let placeMode = null; // null | 'text' | 'vu' | 'image' | 'bitmap' | 'logo'
+let placeDrag = null;
+let pendingBmp = null;
+let pendingImg = null;
+let pendingDragImg = null; // {w,h,name,getPixel(r,c)} for drag-to-size
+let txtRainbow = false;
+
+// ═══════════════════════════════════════════
+// MATRIX INIT
+// ═══════════════════════════════════════════
+const grid = document.getElementById('grid');
+const leds = [];
+
+for (let r = 0; r < ROWS; r++) {
+  leds[r] = [];
+  for (let c = 0; c < COLS; c++) {
+    const el = document.createElement('div');
+    el.className = 'led';
+    el.dataset.r = r; el.dataset.c = c;
+    grid.appendChild(el);
+    leds[r][c] = el;
+  }
+}
+
+// ═══════════════════════════════════════════
+// MOUSE
+// ═══════════════════════════════════════════
+grid.addEventListener('mousedown', e => {
+  e.preventDefault();
+  const t = e.target; if (!t.classList.contains('led')) return;
+  const r = +t.dataset.r, c = +t.dataset.c;
+  if (placeMode) { handlePlaceDown(r,c); return; }
+  if (tool==='line'||tool==='rect'||tool==='circle') { saveUndo(); shapeStart={r,c}; isDrawing=true; return; }
+  if (tool==='draw'||tool==='erase') saveUndo();
+  isDrawing = true;
+  applyTool(r, c);
+});
+
+grid.addEventListener('mousemove', e => {
+  const t = e.target;
+  if (!t.classList.contains('led')) return;
+  const r = +t.dataset.r, c = +t.dataset.c;
+  document.getElementById('coords').textContent = 'R'+r+' C'+c;
+  if ((placeMode==='vu'||placeMode==='bitmap'||placeMode==='logo') && placeDrag) { handlePlaceDrag(r,c); return; }
+  if (isDrawing && shapeStart) { shapeEnd={r,c}; render(); return; }
+  if (isDrawing) applyTool(r, c);
+});
+
+document.addEventListener('mouseup', e => {
+  if ((placeMode==='vu'||placeMode==='bitmap'||placeMode==='logo') && placeDrag) {
+    const t = document.elementFromPoint(e.clientX, e.clientY);
+    if (t && t.classList.contains('led')) finishDragPlace(+t.dataset.r, +t.dataset.c);
+    else cancelPlace();
+    isDrawing = false; return;
+  }
+  if (isDrawing && shapeStart && shapeEnd) {
+    commitShape(shapeEnd.r, shapeEnd.c);
+    shapeStart = null; shapeEnd = null;
+  }
+  isDrawing = false;
+});
+
+grid.addEventListener('mouseleave', () => { document.getElementById('coords').textContent='—'; });
+
+// ═══════════════════════════════════════════
+// TOUCH
+// ═══════════════════════════════════════════
+let lastTR=-1, lastTC=-1;
+grid.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const touch = e.touches[0];
+  const t = document.elementFromPoint(touch.clientX, touch.clientY);
+  if (!t || !t.classList.contains('led')) return;
+  const r=+t.dataset.r, c=+t.dataset.c;
+  if (placeMode) { handlePlaceDown(r,c); isDrawing=true; return; }
+  if (tool==='line'||tool==='rect'||tool==='circle') { saveUndo(); shapeStart={r,c}; isDrawing=true; return; }
+  if (tool==='draw'||tool==='erase') saveUndo();
+  isDrawing=true; lastTR=r; lastTC=c; applyTool(r,c);
+}, {passive:false});
+
+grid.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const touch = e.touches[0];
+  const t = document.elementFromPoint(touch.clientX, touch.clientY);
+  if (!t || !t.classList.contains('led')) return;
+  const r=+t.dataset.r, c=+t.dataset.c;
+  if ((placeMode==='vu'||placeMode==='bitmap'||placeMode==='logo') && placeDrag) { handlePlaceDrag(r,c); return; }
+  if (isDrawing && shapeStart) { shapeEnd={r,c}; lastTR=r; lastTC=c; render(); return; }
+  if (isDrawing && (r!==lastTR||c!==lastTC)) { lastTR=r; lastTC=c; applyTool(r,c); }
+}, {passive:false});
+
+grid.addEventListener('touchend', e => {
+  if ((placeMode==='vu'||placeMode==='bitmap'||placeMode==='logo') && placeDrag) {
+    if (placeDrag.lastR!=null) finishDragPlace(placeDrag.lastR, placeDrag.lastC);
+    else cancelPlace();
+  }
+  if (isDrawing && shapeStart && shapeEnd) {
+    commitShape(shapeEnd.r, shapeEnd.c);
+    shapeStart=null; shapeEnd=null;
+  }
+  isDrawing=false; lastTR=-1; lastTC=-1;
+});
+
+// ═══════════════════════════════════════════
+// TOOLS
+// ═══════════════════════════════════════════
+function getActiveDrawLayer() {
+  return dynLayers.find(l=>l.id===activeDrawLayer);
+}
+
+function getActiveDrawData() {
+  const l = getActiveDrawLayer();
+  return l ? l.data : null;
+}
+
+function applyTool(r, c) {
+  if (placeMode) return;
+  if (tool==='erase') {
+    // Erase from the topmost visible layer that has a pixel at each brush position
+    const half = Math.floor(brushSize/2);
+    for(let dr=-half;dr<brushSize-half;dr++)
+      for(let dc=-half;dc<brushSize-half;dc++){
+        const rr=r+dr, cc=c+dc;
+        if(rr<0||rr>=ROWS||cc<0||cc>=COLS) continue;
+        erasePixelAt(rr, cc);
+      }
+    render();
+    return;
+  }
+  const data = getActiveDrawData();
+  if (!data) return;
+  if (tool==='fill') {
+    saveUndo();
+    floodFill(r, c, data[r][c], getColor());
+    render(); return;
+  }
+  if (tool==='draw') {
+    const color = getColor();
+    const half = Math.floor(brushSize/2);
+    for(let dr=-half;dr<brushSize-half;dr++)
+      for(let dc=-half;dc<brushSize-half;dc++){
+        const rr=r+dr, cc=c+dc;
+        if(rr>=0&&rr<ROWS&&cc>=0&&cc<COLS) data[rr][cc]=color;
+      }
+  }
+  render();
+}
+
+// Erase pixel at (r,c) from the topmost visible layer that has content there
+function erasePixelAt(r, c) {
+  // Walk layers top-down (last in array = topmost)
+  for(let i=dynLayers.length-1; i>=0; i--){
+    const ly = dynLayers[i];
+    if(!ly.vis) continue;
+
+    if(ly.type==='draw' && ly.data[r][c]) {
+      ly.data[r][c] = null;
+      return;
+    }
+
+    if(ly.type==='image' && ly.pixels) {
+      const pr = r - ly.y, pc = c - ly.x;
+      if(pr>=0 && pr<ly.pixels.length && pc>=0 && pc<ly.pixels[pr].length && ly.pixels[pr][pc]) {
+        ly.pixels[pr][pc] = null;
+        return;
+      }
+    }
+  }
+}
+
+// Save undo snapshot — captures full dynLayers state
+function saveUndo() {
+  undoStack.push(snapshotState());
+  if(undoStack.length>MAX_UNDO) undoStack.shift();
+  redoStack.length=0;
+}
+
+function snapshotState() {
+  // Deep clone all dynamic layers + VU states
+  const layerSnap = dynLayers.map(l => {
+    const clone = Object.assign({}, l);
+    if(l.data) clone.data = l.data.map(row=>row.slice());
+    if(l.pixels) clone.pixels = l.pixels.map(row=>row.slice());
+    return clone;
+  });
+  const vuSnap = {};
+  for(const k in vuStates) {
+    vuSnap[k] = {levels:vuStates[k].levels.slice(), peaks:vuStates[k].peaks.slice(), decay:vuStates[k].decay.slice()};
+  }
+  return {layers:layerSnap, vu:vuSnap, activeDraw:activeDrawLayer};
+}
+
+function restoreState(snap) {
+  dynLayers.length = 0;
+  snap.layers.forEach(l => {
+    const clone = Object.assign({}, l);
+    if(l.data) clone.data = l.data.map(row=>row.slice());
+    if(l.pixels) clone.pixels = l.pixels.map(row=>row.slice());
+    dynLayers.push(clone);
+  });
+  // Restore VU states
+  Object.keys(vuStates).forEach(k=>delete vuStates[k]);
+  for(const k in snap.vu) {
+    vuStates[k] = {levels:snap.vu[k].levels.slice(), peaks:snap.vu[k].peaks.slice(), decay:snap.vu[k].decay.slice()};
+  }
+  activeDrawLayer = snap.activeDraw;
+  // Ensure activeDrawLayer still valid
+  if(!dynLayers.find(l=>l.id===activeDrawLayer)) {
+    const dl = dynLayers.find(l=>l.type==='draw');
+    activeDrawLayer = dl ? dl.id : null;
+  }
+  rebuildLayerUI();
+  render();
+}
+
+function rebuildLayerUI() {
+  const list = document.getElementById('lyList');
+  list.querySelectorAll('[data-ly-id]').forEach(el=>el.remove());
+  dynLayers.forEach(l => {
+    if(l.type==='draw') {
+      addDrawLayerUI(l);
+    } else if(l.type==='text') {
+      addLayerUI(l, '✎', '"'+l.text.substring(0,12)+'"');
+    } else if(l.type==='vu') {
+      const icon = l.vuMode==='static'?'🌡':'📊';
+      addLayerUI(l, icon, 'VU '+(l.vuMode==='static'?'Static':'Anim'));
+    } else if(l.type==='image') {
+      const icon = l.id.startsWith('logo_')?'🏫':l.id.startsWith('bmp_')?'⬡':'🖼';
+      const name = l.id.startsWith('logo_')?'Logo':l.id.startsWith('bmp_')?'Bitmap':'Image';
+      addLayerUI(l, icon, name);
+    }
+  });
+  // Re-highlight active draw layer
+  if(activeDrawLayer) selectDrawLayer(activeDrawLayer);
+  refreshStencilUI();
+}
+
+function undo() {
+  if(!undoStack.length) return;
+  redoStack.push(snapshotState());
+  restoreState(undoStack.pop());
+}
+
+function redo() {
+  if(!redoStack.length) return;
+  undoStack.push(snapshotState());
+  restoreState(redoStack.pop());
+}
+
+function setBrush(size, el) {
+  brushSize = size;
+  el.parentElement.querySelectorAll('.btn').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+}
+
+function floodFill(r,c,target,fill) {
+  const data = getActiveDrawData();
+  if(!data) return;
+  if (r<0||r>=ROWS||c<0||c>=COLS) return;
+  if (data[r][c]!==target||data[r][c]===fill) return;
+  data[r][c]=fill;
+  floodFill(r-1,c,target,fill); floodFill(r+1,c,target,fill);
+  floodFill(r,c-1,target,fill); floodFill(r,c+1,target,fill);
+}
+
+// ── Shape drawing ──
+function commitShape(endR, endC) {
+  if (!shapeStart) return;
+  const sr=shapeStart.r, sc=shapeStart.c, color=getColor();
+  if (tool==='line') drawLine(sr,sc,endR,endC,color);
+  else if (tool==='rect') drawRect(sr,sc,endR,endC,color);
+  else if (tool==='circle') drawCircle(sr,sc,endR,endC,color);
+  shapeStart=null; shapeEnd=null;
+  render();
+}
+
+function drawLine(r0,c0,r1,c1,color) {
+  const data = getActiveDrawData(); if(!data) return;
+  const dr=Math.abs(r1-r0), dc=Math.abs(c1-c0);
+  const sr=r0<r1?1:-1, sc=c0<c1?1:-1;
+  let err=dr-dc;
+  while(true) {
+    if(r0>=0&&r0<ROWS&&c0>=0&&c0<COLS) data[r0][c0]=color;
+    if(r0===r1&&c0===c1) break;
+    const e2=2*err;
+    if(e2>-dc){err-=dc;r0+=sr;}
+    if(e2<dr){err+=dr;c0+=sc;}
+  }
+}
+
+// Line preview (doesn't write to draw layer)
+function getLinePixels(r0,c0,r1,c1) {
+  const pts=[];
+  const dr=Math.abs(r1-r0), dc=Math.abs(c1-c0);
+  const sr=r0<r1?1:-1, sc=c0<c1?1:-1;
+  let err=dr-dc;
+  while(true) {
+    if(r0>=0&&r0<ROWS&&c0>=0&&c0<COLS) pts.push({r:r0,c:c0});
+    if(r0===r1&&c0===c1) break;
+    const e2=2*err;
+    if(e2>-dc){err-=dc;r0+=sr;}
+    if(e2<dr){err+=dr;c0+=sc;}
+  }
+  return pts;
+}
+
+function getRectPixels(r0,c0,r1,c1) {
+  const pts=[];
+  const minR=Math.min(r0,r1), maxR=Math.max(r0,r1);
+  const minC=Math.min(c0,c1), maxC=Math.max(c0,c1);
+  for(let c=minC;c<=maxC;c++) { pts.push({r:minR,c:c}); pts.push({r:maxR,c:c}); }
+  for(let r=minR+1;r<maxR;r++) { pts.push({r:r,c:minC}); pts.push({r:r,c:maxC}); }
+  return pts;
+}
+
+function getCirclePixels(r0,c0,r1,c1) {
+  const pts=[];
+  const radius = Math.round(Math.sqrt((r1-r0)**2 + (c1-c0)**2));
+  let x=radius, y=0, err=1-radius;
+  while(x>=y) {
+    [{r:r0+y,c:c0+x},{r:r0+x,c:c0+y},{r:r0+x,c:c0-y},{r:r0+y,c:c0-x},
+     {r:r0-y,c:c0-x},{r:r0-x,c:c0-y},{r:r0-x,c:c0+y},{r:r0-y,c:c0+x}].forEach(p=>{
+      if(p.r>=0&&p.r<ROWS&&p.c>=0&&p.c<COLS) pts.push(p);
+    });
+    y++;
+    if(err<0) err+=2*y+1;
+    else { x--; err+=2*(y-x)+1; }
+  }
+  return pts;
+}
+
+function drawRect(r0,c0,r1,c1,color) {
+  const minR=Math.min(r0,r1), maxR=Math.max(r0,r1);
+  const minC=Math.min(c0,c1), maxC=Math.max(c0,c1);
+  for(let c=minC;c<=maxC;c++) { setPx(minR,c,color); setPx(maxR,c,color); }
+  for(let r=minR;r<=maxR;r++) { setPx(r,minC,color); setPx(r,maxC,color); }
+}
+
+function drawCircle(r0,c0,r1,c1,color) {
+  const radius = Math.round(Math.sqrt((r1-r0)**2 + (c1-c0)**2));
+  let x=radius, y=0, err=1-radius;
+  while(x>=y) {
+    setPx(r0+y,c0+x,color); setPx(r0+x,c0+y,color);
+    setPx(r0+x,c0-y,color); setPx(r0+y,c0-x,color);
+    setPx(r0-y,c0-x,color); setPx(r0-x,c0-y,color);
+    setPx(r0-x,c0+y,color); setPx(r0-y,c0+x,color);
+    y++;
+    if(err<0) err+=2*y+1;
+    else { x--; err+=2*(y-x)+1; }
+  }
+}
+
+function setPx(r,c,color) {
+  const data = getActiveDrawData(); if(!data) return;
+  if(r>=0&&r<ROWS&&c>=0&&c<COLS) data[r][c]=color;
+}
+
+// Shape preview overlay element (used for VU placement only)
+let previewEl = null;
+function hideShapePreview() { if(previewEl) previewEl.style.display='none'; }
+
+// ═══════════════════════════════════════════
+// BITMAP FONT
+// ═══════════════════════════════════════════
+const FONT={
+  'A':['01110','10001','10001','11111','10001','10001','10001'],
+  'B':['11110','10001','10001','11110','10001','10001','11110'],
+  'C':['01110','10001','10000','10000','10000','10001','01110'],
+  'D':['11110','10001','10001','10001','10001','10001','11110'],
+  'E':['11111','10000','10000','11110','10000','10000','11111'],
+  'F':['11111','10000','10000','11110','10000','10000','10000'],
+  'G':['01110','10001','10000','10111','10001','10001','01110'],
+  'H':['10001','10001','10001','11111','10001','10001','10001'],
+  'I':['01110','00100','00100','00100','00100','00100','01110'],
+  'J':['00111','00010','00010','00010','00010','10010','01100'],
+  'K':['10001','10010','10100','11000','10100','10010','10001'],
+  'L':['10000','10000','10000','10000','10000','10000','11111'],
+  'M':['10001','11011','10101','10101','10001','10001','10001'],
+  'N':['10001','11001','10101','10011','10001','10001','10001'],
+  'O':['01110','10001','10001','10001','10001','10001','01110'],
+  'P':['11110','10001','10001','11110','10000','10000','10000'],
+  'Q':['01110','10001','10001','10001','10101','10010','01101'],
+  'R':['11110','10001','10001','11110','10100','10010','10001'],
+  'S':['01110','10001','10000','01110','00001','10001','01110'],
+  'T':['11111','00100','00100','00100','00100','00100','00100'],
+  'U':['10001','10001','10001','10001','10001','10001','01110'],
+  'V':['10001','10001','10001','10001','01010','01010','00100'],
+  'W':['10001','10001','10001','10101','10101','11011','10001'],
+  'X':['10001','10001','01010','00100','01010','10001','10001'],
+  'Y':['10001','10001','01010','00100','00100','00100','00100'],
+  'Z':['11111','00001','00010','00100','01000','10000','11111'],
+  '0':['01110','10011','10101','10101','10101','11001','01110'],
+  '1':['00100','01100','00100','00100','00100','00100','01110'],
+  '2':['01110','10001','00001','00110','01000','10000','11111'],
+  '3':['01110','10001','00001','00110','00001','10001','01110'],
+  '4':['00010','00110','01010','10010','11111','00010','00010'],
+  '5':['11111','10000','11110','00001','00001','10001','01110'],
+  '6':['01110','10001','10000','11110','10001','10001','01110'],
+  '7':['11111','00001','00010','00100','01000','01000','01000'],
+  '8':['01110','10001','10001','01110','10001','10001','01110'],
+  '9':['01110','10001','10001','01111','00001','10001','01110'],
+  ' ':['00000','00000','00000','00000','00000','00000','00000'],
+  '!':['00100','00100','00100','00100','00100','00000','00100'],
+  '.':['00000','00000','00000','00000','00000','00000','00100'],
+  '-':['00000','00000','00000','11111','00000','00000','00000'],
+  '?':['01110','10001','00001','00110','00100','00000','00100'],
+  '#':['01010','01010','11111','01010','11111','01010','01010'],
+  ':':['00000','00100','00100','00000','00100','00100','00000'],
+  ',':['00000','00000','00000','00000','00000','00100','01000'],
+  '%':['11001','11010','00010','00100','01000','01011','10011'],
+  '$':['00100','01111','10100','01110','00101','11110','00100'],
+  '/':['00001','00010','00010','00100','01000','01000','10000'],
+};
+
+function getTextBmp(text, size) {
+  const chars = text.toUpperCase().split('');
+  let raw = [];
+  for (let r=0;r<7;r++) {
+    raw[r]=[];
+    chars.forEach((ch,ci)=>{
+      const g=FONT[ch]||FONT[' '];
+      for(let c=0;c<5;c++) raw[r].push(g[r][c]==='1'?1:0);
+      if(ci<chars.length-1) raw[r].push(0);
+    });
+  }
+  if(size==='small') {
+    let s=[]; for(let r=0;r<5;r++) s[r]=raw[Math.min(Math.round(r*6/4),6)]; return s;
+  }
+  if(size==='large') {
+    let s=[]; for(let r=0;r<9;r++) s[r]=raw[Math.min(Math.round(r*6/8),6)]; return s;
+  }
+  return raw;
+}
+
+// Rainbow color for text
+function rainbowColor(i, total) {
+  const h = (i / Math.max(total,1)) * 360;
+  return 'hsl('+h+',100%,50%)';
+}
+
+function hslToHex(hsl) {
+  const d = document.createElement('div');
+  d.style.color = hsl; document.body.appendChild(d);
+  const rgb = getComputedStyle(d).color; document.body.removeChild(d);
+  const m = rgb.match(/(\d+)/g);
+  return '#'+m.slice(0,3).map(x=>(+x).toString(16).padStart(2,'0')).join('');
+}
+
+// ═══════════════════════════════════════════
+// VU METER
+// ═══════════════════════════════════════════
+const vuSchemes = {
+  classic: t => { if(t<0.5) return lerpC('#00ff00','#ffff00',t*2); return lerpC('#ffff00','#ff0000',(t-0.5)*2); },
+  cool: t => lerpC('#00ffff','#0044ff',t),
+  warm: t => lerpC('#ffdd00','#ff2200',t),
+  neon: t => lerpC('#ff00ff','#00ffff',t),
+  rainbow: t => {
+    // Bottom to top: Red → Orange → Yellow → Green → Blue → Purple
+    if(t<0.2) return lerpC('#ff0000','#ff8800',t/0.2);
+    if(t<0.4) return lerpC('#ff8800','#ffff00',(t-0.2)/0.2);
+    if(t<0.6) return lerpC('#ffff00','#00ff00',(t-0.4)/0.2);
+    if(t<0.8) return lerpC('#00ff00','#0066ff',(t-0.6)/0.2);
+    return lerpC('#0066ff','#aa00ff',(t-0.8)/0.2);
+  },
+  mono: t => '#00e5a0',
+};
+
+function lerpC(a,b,t) {
+  const ar=parseInt(a.slice(1,3),16),ag=parseInt(a.slice(3,5),16),ab=parseInt(a.slice(5,7),16);
+  const br=parseInt(b.slice(1,3),16),bg=parseInt(b.slice(3,5),16),bb=parseInt(b.slice(5,7),16);
+  return 'rgb('+Math.round(ar+(br-ar)*t)+','+Math.round(ag+(bg-ag)*t)+','+Math.round(ab+(bb-ab)*t)+')';
+}
+
+const vuStates = {};
+
+function simVU(layer) {
+  const s = vuStates[layer.id] || (vuStates[layer.id]={levels:[],peaks:[],decay:[]});
+  while(s.levels.length<layer.bars){s.levels.push(Math.random());s.peaks.push(0);s.decay.push(0);}
+  const sf=[0.03,0.06,0.1,0.15,0.22][2];
+  for(let i=0;i<layer.bars;i++){
+    s.levels[i]+=(Math.random()-s.levels[i])*sf;
+    s.levels[i]=Math.max(0,Math.min(1,s.levels[i]+(Math.random()-0.5)*0.08));
+    if(s.levels[i]>s.peaks[i]){s.peaks[i]=s.levels[i];s.decay[i]=30;}
+    else{s.decay[i]--;if(s.decay[i]<=0)s.peaks[i]-=0.02;}
+  }
+}
+
+// ═══════════════════════════════════════════
+// MICROPHONE INPUT (Web Audio API)
+// ═══════════════════════════════════════════
+let micStream = null;
+let micAnalyser = null;
+let micData = null;
+let micLevel = 0;
+let micCtx = null;
+let micGain = 1.0; // Sensitivity multiplier (controlled by slider)
+
+function startMicInput() {
+  if(micAnalyser) return; // Already running
+
+  navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+    .then(stream => {
+      micStream = stream;
+      micCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const source = micCtx.createMediaStreamSource(stream);
+      micAnalyser = micCtx.createAnalyser();
+      micAnalyser.fftSize = 512;
+      micAnalyser.smoothingTimeConstant = 0.25;
+      source.connect(micAnalyser);
+      micData = new Uint8Array(micAnalyser.frequencyBinCount);
+      console.log('[Mic] Audio input active');
+    })
+    .catch(err => {
+      console.warn('[Mic] Permission denied or unavailable:', err);
+      alert('Microphone access denied. Check browser permissions.');
+    });
+}
+
+function stopMicInput() {
+  // Only stop if no mic VU layers remain
+  const hasMicVU = dynLayers.some(l => l.type==='vu' && l.vuMode==='mic' && l.vis);
+  if(hasMicVU) return;
+
+  if(micStream) {
+    micStream.getTracks().forEach(t => t.stop());
+    micStream = null;
+  }
+  if(micCtx) {
+    micCtx.close();
+    micCtx = null;
+  }
+  micAnalyser = null;
+  micData = null;
+  micLevel = 0;
+  console.log('[Mic] Audio input stopped');
+}
+
+function getMicLevel() {
+  if(!micAnalyser || !micData) return 0;
+  micAnalyser.getByteFrequencyData(micData);
+
+  // Find peak and weighted average — emphasize low/mid freqs
+  let sum = 0, weight = 0, peak = 0;
+  for(let i = 0; i < micData.length; i++) {
+    const w = i < micData.length * 0.3 ? 4 : i < micData.length * 0.6 ? 2 : 1;
+    sum += micData[i] * w;
+    weight += w;
+    if(micData[i] > peak) peak = micData[i];
+  }
+  const avg = sum / weight / 255;
+
+  // Mix average with peak for punchier response
+  const mixed = avg * 0.4 + (peak / 255) * 0.6;
+
+  // Aggressive logarithmic scaling
+  const log = mixed > 0.001 ? (Math.log10(mixed * 99 + 1) / 2) : 0;
+
+  // Heavy gain boost, scaled by sensitivity slider
+  const gained = Math.min(1, log * 2.8 * micGain);
+
+  // Very fast attack, moderate decay
+  if(gained > micLevel) {
+    micLevel = gained; // instant attack
+  } else {
+    micLevel = micLevel * 0.82 + gained * 0.18; // smooth decay
+  }
+  return micLevel;
+}
+
+// Get multi-band spectrum data for VU meters with multiple bars
+function getMicBands(numBands) {
+  if(!micAnalyser || !micData) return new Array(numBands).fill(0);
+  micAnalyser.getByteFrequencyData(micData);
+
+  const bands = [];
+  const binCount = micData.length;
+  for(let b = 0; b < numBands; b++) {
+    const lo = Math.floor(Math.pow(b / numBands, 1.5) * binCount);
+    const hi = Math.floor(Math.pow((b + 1) / numBands, 1.5) * binCount);
+    let sum = 0, count = 0, peak = 0;
+    for(let i = lo; i < hi && i < binCount; i++) {
+      sum += micData[i]; count++;
+      if(micData[i] > peak) peak = micData[i];
+    }
+    const avg = count > 0 ? sum / count / 255 : 0;
+    const mixed = avg * 0.3 + (peak / 255) * 0.7;
+    const log = mixed > 0.001 ? (Math.log10(mixed * 99 + 1) / 2) : 0;
+    bands.push(Math.min(1, log * 2.8 * micGain));
+  }
+  return bands;
+}
+
+function micVU(layer) {
+  const s = vuStates[layer.id] || (vuStates[layer.id]={levels:[],peaks:[],decay:[]});
+  if(!micAnalyser) { startMicInput(); return; }
+
+  const numBars = layer.bars || 1;
+
+  if(numBars <= 1) {
+    // Single bar — use overall level
+    const level = getMicLevel();
+    s.levels[0] = level;
+    if(level > (s.peaks[0]||0)) { s.peaks[0] = level; s.decay[0] = 20; }
+    else { s.decay[0]--; if(s.decay[0] <= 0) s.peaks[0] -= 0.03; }
+    s.peaks[0] = Math.max(0, s.peaks[0]);
+  } else {
+    // Multi-band spectrum
+    const bands = getMicBands(numBars);
+    while(s.levels.length < numBars) { s.levels.push(0); s.peaks.push(0); s.decay.push(0); }
+    for(let i = 0; i < numBars; i++) {
+      // Smooth each band
+      if(bands[i] > s.levels[i]) {
+        s.levels[i] = s.levels[i] * 0.2 + bands[i] * 0.8;
+      } else {
+        s.levels[i] = s.levels[i] * 0.7 + bands[i] * 0.3;
+      }
+      if(s.levels[i] > s.peaks[i]) { s.peaks[i] = s.levels[i]; s.decay[i] = 15; }
+      else { s.decay[i]--; if(s.decay[i] <= 0) s.peaks[i] -= 0.04; }
+      s.peaks[i] = Math.max(0, s.peaks[i]);
+    }
+  }
+}
+
+function renderVU(layer, buf) {
+  const s = vuStates[layer.id]; if(!s) return;
+  const scheme = layer.colorMode==='mono' ? (()=>layer.monoColor) : (vuSchemes[layer.colorMode]||vuSchemes.classic);
+  const ox=layer.x, oy=layer.y, w=layer.w, h=layer.h, bars=layer.bars;
+
+  if(layer.orient==='vertical'){
+    const bw=Math.max(1,Math.floor(w/bars));
+    for(let b=0;b<bars;b++){
+      const filled=Math.round(s.levels[b]*h);
+      for(let row=0;row<h;row++){
+        const fb=h-1-row;
+        if(fb<filled){
+          const color=scheme(fb/(h-1));
+          for(let dx=0;dx<bw;dx++){
+            const cc=ox+b*bw+dx, rr=oy+row;
+            if(rr>=0&&rr<ROWS&&cc>=0&&cc<COLS) buf[rr][cc]=color;
+          }
+        }
+      }
+    }
+  } else {
+    const bh=Math.max(1,Math.floor(h/bars));
+    for(let b=0;b<bars;b++){
+      const filled=Math.round(s.levels[b]*w);
+      for(let col=0;col<w;col++){
+        if(col<filled){
+          const color=scheme(col/(w-1));
+          for(let dy=0;dy<bh;dy++){
+            const rr=oy+b*bh+dy, cc=ox+col;
+            if(rr>=0&&rr<ROWS&&cc>=0&&cc<COLS) buf[rr][cc]=color;
+          }
+        }
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════
+// TEXT RENDERING
+// ═══════════════════════════════════════════
+function resolveTextVars(text) {
+  const goal = parseFloat(document.getElementById('fundGoal').value) || 0;
+  const pct = goal > 0 ? Math.min(100, (donationTotal / goal) * 100) : 0;
+  const remaining = Math.max(0, 100 - pct);
+  const raised = donationTotal;
+  const left = Math.max(0, goal - donationTotal);
+
+  return text
+    .replace(/\{pct\}/gi, Math.round(pct) + '%')
+    .replace(/\{left\}/gi, Math.round(remaining) + '%')
+    .replace(/\{raised\}/gi, '$' + Math.round(raised))
+    .replace(/\{goal\}/gi, '$' + Math.round(goal))
+    .replace(/\{remaining\}/gi, '$' + Math.round(left));
+}
+
+function renderText(layer, buf) {
+  const displayText = resolveTextVars(layer.text);
+  const bmp = getTextBmp(displayText, layer.size);
+  const totalW = bmp[0]?bmp[0].length:0;
+  if(totalW === 0) return;
+  let ox = layer.x;
+
+  if(layer.scroll) {
+    const spd = layer.scrollSpeed||1;
+    const time = Date.now()/(800/spd);
+    const gap = 12; // pixel gap between repeating copies
+    const cycle = totalW + gap;
+    ox = COLS - (Math.floor(time) % cycle);
+
+    // Render multiple copies so text wraps seamlessly
+    for(let copy = -1; copy <= Math.ceil(COLS / cycle) + 1; copy++) {
+      const startX = ox + copy * cycle;
+      renderTextBmp(bmp, layer, buf, startX);
+    }
+  } else {
+    renderTextBmp(bmp, layer, buf, ox);
+  }
+}
+
+function renderTextBmp(bmp, layer, buf, ox) {
+  const totalW = bmp[0]?bmp[0].length:0;
+  for(let r=0;r<bmp.length;r++){
+    for(let c=0;c<bmp[r].length;c++){
+      if(bmp[r][c]){
+        const gr=layer.y+r, gc=ox+c;
+        if(gr>=0&&gr<ROWS&&gc>=0&&gc<COLS){
+          if(layer.rainbow){
+            const charIdx=Math.floor(c/6);
+            const totalChars=Math.ceil(totalW/6);
+            const shift=layer.scroll?(Date.now()/50):0;
+            buf[gr][gc]=rainbowColor((charIdx+shift)%totalChars,totalChars);
+          } else {
+            buf[gr][gc]=layer.color;
+          }
+        }
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════
+// IMAGE RENDERING
+// ═══════════════════════════════════════════
+function renderImage(layer, buf) {
+  if(!layer.pixels) return;
+
+  // Walk animation: scroll horizontally + optional 2-frame cycle
+  let xOffset = layer.x;
+  let activePixels = layer.pixels;
+  if(layer.walk) {
+    const speed = layer.walkSpeed || 1;
+    const imgW = layer.pixels[0] ? layer.pixels[0].length : 0;
+    const cycle = COLS + imgW;
+    const time = Date.now() / (300 / speed);
+    xOffset = COLS - (Math.floor(time) % cycle);
+
+    // 2-frame walk cycle if alternate frame exists
+    if(layer.pixelsB) {
+      const frameTime = Math.floor(Date.now() / 200) % 2;
+      activePixels = frameTime === 0 ? layer.pixels : layer.pixelsB;
+    }
+  }
+
+  for(let r=0;r<activePixels.length;r++)
+    for(let c=0;c<activePixels[r].length;c++){
+      const px=activePixels[r][c];
+      if(px){const gr=layer.y+r,gc=xOffset+c;if(gr>=0&&gr<ROWS&&gc>=0&&gc<COLS)buf[gr][gc]=px;}
+    }
+}
+
+// ═══════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════
+function render() {
+  const buf = Array.from({length:ROWS}, ()=>Array(COLS).fill(null));
+
+  if(layers.bg.vis && layers.bg.color)
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) buf[r][c]=layers.bg.color;
+
+  for(const ly of dynLayers){
+    if(!ly.vis) continue;
+    if(ly.type==='draw') {
+      for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++)
+        if(ly.data[r][c]) buf[r][c]=ly.data[r][c];
+    }
+    else if(ly.type==='vu'){
+      if(ly.vuMode==='animated') simVU(ly); else if(ly.vuMode==='mic') micVU(ly);
+      renderVU(ly,buf);
+    }
+    else if(ly.type==='text') renderText(ly,buf);
+    else if(ly.type==='image') renderImage(ly,buf);
+  }
+
+  // Stencil post-process: convert stenciled layer pixels to white
+  // This runs AFTER normal compositing so it can't interfere with drawing
+  if(dynLayers.some(l=>l.stencil)){
+    // Build a mask of which pixels belong to stenciled layers
+    const mask = Array.from({length:ROWS}, ()=>Array(COLS).fill(false));
+    for(const ly of dynLayers){
+      if(!ly.vis || !ly.stencil) continue;
+      if(ly.type==='draw') {
+        for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++)
+          if(ly.data[r][c]) mask[r][c]=true;
+      }
+      else if(ly.type==='text') {
+        const bmp=getTextBmp(resolveTextVars(ly.text),ly.size);
+        let ox=ly.x;
+        if(ly.scroll){const spd=ly.scrollSpeed||1;const time=Date.now()/(800/spd);ox=COLS-(Math.floor(time)%(bmp[0]?bmp[0].length+COLS:COLS));}
+        for(let r=0;r<bmp.length;r++) for(let c=0;c<bmp[r].length;c++)
+          if(bmp[r][c]){const gr=ly.y+r,gc=ox+c;if(gr>=0&&gr<ROWS&&gc>=0&&gc<COLS) mask[gr][gc]=true;}
+      }
+      else if(ly.type==='image' && ly.pixels) {
+        for(let r=0;r<ly.pixels.length;r++) for(let c=0;c<ly.pixels[r].length;c++)
+          if(ly.pixels[r][c]){const gr=ly.y+r,gc=ly.x+c;if(gr>=0&&gr<ROWS&&gc>=0&&gc<COLS) mask[gr][gc]=true;}
+      }
+    }
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++)
+      if(mask[r][c] && buf[r][c]) buf[r][c]='#ffffff';
+  }
+
+  // Live shape preview — draw directly onto buffer without modifying draw layer
+  if(shapeStart && shapeEnd) {
+    const color = getColor();
+    let pts = [];
+    if(tool==='line') pts = getLinePixels(shapeStart.r,shapeStart.c,shapeEnd.r,shapeEnd.c);
+    else if(tool==='rect') pts = getRectPixels(shapeStart.r,shapeStart.c,shapeEnd.r,shapeEnd.c);
+    else if(tool==='circle') pts = getCirclePixels(shapeStart.r,shapeStart.c,shapeEnd.r,shapeEnd.c);
+    pts.forEach(p => { if(p.r>=0&&p.r<ROWS&&p.c>=0&&p.c<COLS) buf[p.r][p.c] = color; });
+  }
+
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      const el=leds[r][c], color=buf[r][c];
+      if(color){
+        el.style.background=color; el.style.color=color;
+        el.style.boxShadow='0 0 3px '+color+', 0 0 8px '+color;
+        el.classList.add('on');
+      } else {
+        el.style.background=''; el.style.color=''; el.style.boxShadow='';
+        el.classList.remove('on');
+      }
+    }
+  }
+
+  if(wsOk && document.getElementById('autoSync').checked) sendFrame(buf);
+  refreshFundraiserCounts();
+}
+
+// Animation loop
+(function animLoop(){ const hasAnim=dynLayers.some(l=>l.vis&&((l.type==='vu'&&l.vuMode!=='static')||l.scroll||l.walk)); if(hasAnim) render(); requestAnimationFrame(animLoop); })();
+
+// ═══════════════════════════════════════════
+// PLACEMENT MODE
+// ═══════════════════════════════════════════
+function startPlacement(type) {
+  if(placeMode===type){cancelPlace();return;}
+  cancelPlace();
+  placeMode=type;
+  const banner=document.getElementById('placeBanner');
+  if(type==='vu'){
+    banner.textContent='Click and drag on matrix to define VU area — ESC to cancel';
+    grid.style.cursor='crosshair';
+  } else if(type==='bitmap'||type==='logo') {
+    const lbl=type==='logo'?'logo':'bitmap';
+    banner.textContent='Click and drag on matrix to place & size '+lbl+' — ESC to cancel';
+    grid.style.cursor='crosshair';
+  } else {
+    const lbl=type==='text'?'text':'image';
+    banner.textContent='Click on matrix to place '+lbl+' — ESC to cancel';
+    grid.style.cursor='pointer';
+  }
+  banner.classList.add('on');
+  // Highlight button
+  const btnId=type==='vu'?'vuPlaceBtn':type==='image'?'imgPlaceBtn':type==='text'?'txtPlaceBtn':'';
+  if(btnId){const b=document.getElementById(btnId);b.classList.add('on');b.textContent='⏹ Cancel';}
+  // Highlight panel
+  const pnlMap={text:'pnlText',vu:'pnlVu',image:'pnlImage',bitmap:'pnlBitmap',logo:'pnlLogo'};
+  if(pnlMap[type]) setActivePanel(pnlMap[type]);
+}
+
+function cancelPlace() {
+  if(!placeMode) return;
+  const wasDonPct = placeMode === 'donpct';
+  document.getElementById('placeBanner').classList.remove('on');
+  grid.style.cursor='crosshair';
+  placeDrag=null;
+  pendingDragImg=null;
+  clearDragPreview();
+  ['txtPlaceBtn','vuPlaceBtn','imgPlaceBtn'].forEach(id=>{
+    const b=document.getElementById(id); if(!b)return;
+    b.classList.remove('on');
+    if(id==='vuPlaceBtn') b.textContent='📍 Drag VU Area on Matrix';
+    else if(id==='txtPlaceBtn') b.textContent='📍 Place Text on Matrix';
+    else b.textContent='📍 Place Image on Matrix';
+  });
+  hideShapePreview();
+  placeMode=null;
+  // Reopen fundraiser modal if we were placing the donation %
+  if(wasDonPct) document.getElementById('fundModal').style.display = 'block';
+}
+
+function handlePlaceDown(r,c) {
+  if(placeMode==='vu'||placeMode==='bitmap'||placeMode==='logo') { placeDrag={startR:r,startC:c,lastR:r,lastC:c}; return; }
+  if(placeMode==='text') { cancelPlace(); addTextLayer(r,c); return; }
+  if(placeMode==='image') { cancelPlace(); addImageLayer(r,c); return; }
+  if(placeMode==='donpct') {
+    const ly = dynLayers.find(l => l.id === donPctLayerId);
+    if(ly) { ly.x = c; ly.y = r; ly._manualPos = true; render(); }
+    cancelPlace();
+    return;
+  }
+}
+
+function handlePlaceDrag(r,c) {
+  if(!placeDrag) return;
+  placeDrag.lastR=r; placeDrag.lastC=c;
+  const sr=placeDrag.startR, sc=placeDrag.startC;
+  const minR=Math.min(sr,r),maxR=Math.max(sr,r),minC=Math.min(sc,c),maxC=Math.max(sc,c);
+
+  // For bitmap/logo: lock aspect ratio and render live preview
+  if((placeMode==='bitmap'||placeMode==='logo') && pendingDragImg) {
+    const srcW=pendingDragImg.w, srcH=pendingDragImg.h;
+    const aspect=srcW/srcH;
+    let dw=maxC-minC+1, dh=maxR-minR+1;
+    // Lock aspect ratio based on whichever dimension is larger
+    if(dw/dh > aspect) dw=Math.max(1,Math.round(dh*aspect));
+    else dh=Math.max(1,Math.round(dw/aspect));
+    // Render scaled preview directly onto grid
+    renderDragPreview(minR,minC,dw,dh);
+    return;
+  }
+
+  // VU: show rectangle preview
+  if(!previewEl){previewEl=document.createElement('div');previewEl.className='shape-preview';grid.appendChild(previewEl);}
+  const tl=leds[minR][minC].getBoundingClientRect(), br2=leds[maxR][maxC].getBoundingClientRect(), gR=grid.getBoundingClientRect();
+  previewEl.style.display='block';
+  previewEl.style.left=(tl.left-gR.left)+'px'; previewEl.style.top=(tl.top-gR.top)+'px';
+  previewEl.style.width=(br2.right-tl.left)+'px'; previewEl.style.height=(br2.bottom-tl.top)+'px';
+}
+
+// Live render of scaled bitmap/logo onto grid during drag
+let dragPreviewPixels = null;
+function renderDragPreview(startR, startC, dw, dh) {
+  // Clear previous preview
+  if(dragPreviewPixels) {
+    dragPreviewPixels.forEach(({r,c})=>{
+      if(r>=0&&r<ROWS&&c>=0&&c<COLS) {
+        leds[r][c].style.background=''; leds[r][c].style.boxShadow=''; leds[r][c].classList.remove('on');
+      }
+    });
+  }
+  dragPreviewPixels = [];
+  if(!pendingDragImg) return;
+
+  const src = pendingDragImg;
+  for(let pr=0;pr<dh;pr++) {
+    for(let pc=0;pc<dw;pc++) {
+      const gr=startR+pr, gc=startC+pc;
+      if(gr<0||gr>=ROWS||gc<0||gc>=COLS) continue;
+      // Sample from source
+      const sr=Math.floor(pr*src.h/dh), sc=Math.floor(pc*src.w/dw);
+      const color = src.getPixel(sr, sc);
+      if(color) {
+        leds[gr][gc].style.background=color;
+        leds[gr][gc].style.boxShadow='0 0 3px '+color+', 0 0 8px '+color;
+        leds[gr][gc].classList.add('on');
+        dragPreviewPixels.push({r:gr,c:gc});
+      }
+    }
+  }
+}
+
+function clearDragPreview() {
+  if(dragPreviewPixels) {
+    dragPreviewPixels.forEach(({r,c})=>{
+      if(r>=0&&r<ROWS&&c>=0&&c<COLS) {
+        leds[r][c].style.background=''; leds[r][c].style.boxShadow=''; leds[r][c].classList.remove('on');
+      }
+    });
+    dragPreviewPixels=null;
+  }
+  render();
+}
+
+function finishDragPlace(endR, endC) {
+  if(!placeDrag) return;
+  const sr=placeDrag.startR, sc=placeDrag.startC;
+  const minR=Math.min(sr,endR), maxR=Math.max(sr,endR);
+  const minC=Math.min(sc,endC), maxC=Math.max(sc,endC);
+  const w=maxC-minC+1, h=maxR-minR+1;
+
+  if(placeMode==='vu') {
+    if(w<2||h<2){cancelPlace();return;}
+    cancelPlace();
+    addVuLayer(minC, minR, w, h);
+    return;
+  }
+
+  if((placeMode==='bitmap'||placeMode==='logo') && pendingDragImg) {
+    const srcW=pendingDragImg.w, srcH=pendingDragImg.h;
+    const aspect=srcW/srcH;
+    let dw=w, dh=h;
+    if(dw/dh > aspect) dw=Math.max(1,Math.round(dh*aspect));
+    else dh=Math.max(1,Math.round(dw/aspect));
+    if(dw<1||dh<1){cancelPlace();return;}
+
+    // Generate scaled pixel array
+    const pixels=[];
+    const src=pendingDragImg;
+    for(let pr=0;pr<dh;pr++){
+      pixels[pr]=[];
+      for(let pc=0;pc<dw;pc++){
+        const sr2=Math.floor(pr*src.h/dh), sc2=Math.floor(pc*src.w/dw);
+        pixels[pr][pc] = src.getPixel(sr2,sc2);
+      }
+    }
+
+    // If placing Olaf, also generate the alternate walk frame for animation
+    let pixelsB = null;
+    if(pendingDragImg.name === 'Olaf') {
+      const olafWalk = logoPresets.find(l => l.name === 'Olaf Walk');
+      if(olafWalk) {
+        pixelsB = [];
+        for(let pr=0;pr<dh;pr++){
+          pixelsB[pr]=[];
+          for(let pc=0;pc<dw;pc++){
+            const sr2=Math.floor(pr*olafWalk.h/dh), sc2=Math.floor(pc*olafWalk.w/dw);
+            pixelsB[pr][pc] = decodeLogoPixel(olafWalk, sr2, sc2);
+          }
+        }
+      }
+    }
+
+    const id=(placeMode==='logo'?'logo_':'bmp_')+(++layerIdN);
+    const icon=placeMode==='logo'?'🏫':'⬡';
+    const name=pendingDragImg.name||'Image';
+    const layer={id,type:'image',vis:true,pixels:pixels,x:minC,y:minR};
+    if(pixelsB) layer.pixelsB = pixelsB;
+    clearDragPreview();
+    saveUndo();
+    cancelPlace();
+    dynLayers.push(layer);
+    addLayerUI(layer,icon,name);
+    render();
+    return;
+  }
+
+  cancelPlace();
+}
+
+// Escape handled in keyboard shortcuts section below
+
+// ═══════════════════════════════════════════
+// ADD LAYERS
+// ═══════════════════════════════════════════
+function addTextLayer(r, c) {
+  saveUndo();
+  const id='txt_'+(++layerIdN);
+  const layer = {
+    id, type:'text', vis:true,
+    text: document.getElementById('txtInput').value||'HELLO',
+    color: document.getElementById('txtColor').value,
+    rainbow: txtRainbow,
+    x:c, y:r,
+    size: document.getElementById('txtSize').value,
+    scroll: document.getElementById('txtScroll').checked,
+    scrollSpeed: [0.5,1,2,4,8][document.getElementById('txtSpeed').value-1],
+  };
+  dynLayers.push(layer);
+  addLayerUI(layer,'✎','"'+layer.text.substring(0,12)+'"');
+  render();
+}
+
+function addVuLayer(x, y, w, h) {
+  saveUndo();
+  const id='vu_'+(++layerIdN);
+  const isStatic = vuCfg.mode==='static';
+  const isMic = vuCfg.mode==='mic';
+  const layer = {
+    id, type:'vu', vis:true, vuMode:vuCfg.mode,
+    orient:vuCfg.orient, bars:vuCfg.bars||1,
+    colorMode:vuCfg.colorMode,
+    monoColor:document.getElementById('vuMonoColor').value,
+    x:x, y:y, w:w, h:h,
+  };
+  if(isStatic) vuStates[id]={levels:[0.5],peaks:[0],decay:[0]};
+  if(isMic) { vuStates[id]={levels:[0],peaks:[0],decay:[0]}; startMicInput(); }
+  dynLayers.push(layer);
+  const icon = isStatic?'🌡':isMic?'🎤':'📊';
+  const label = isStatic?'Static':isMic?'Mic':'Anim';
+  addLayerUI(layer, icon, 'VU '+label+' '+vuCfg.orient.substring(0,4));
+  render();
+}
+
+function addBitmapLayer(r, c) {
+  if(!pendingBmp) return;
+  const id='bmp_'+(++layerIdN);
+  const color = document.getElementById('bmpColor').value;
+  const pixels = [];
+  for(let br=0;br<pendingBmp.h;br++){
+    pixels[br]=[];
+    for(let bc=0;bc<pendingBmp.w;bc++){
+      pixels[br][bc]=pendingBmp.data[br*pendingBmp.w+bc]?color:null;
+    }
+  }
+  const layer={id,type:'image',vis:true,pixels:pixels,x:c,y:r};
+  dynLayers.push(layer);
+  addLayerUI(layer,'⬡',pendingBmp.name);
+  pendingBmp=null;
+  render();
+}
+
+function handleImgUpload(e) {
+  const file=e.target.files[0]; if(!file) return;
+  const img=new Image();
+  img.onload=()=>{
+    const canvas=document.createElement('canvas');
+    const mode=document.getElementById('imgResize').value;
+    let w,h;
+    if(mode==='fit'){const a=img.width/img.height;if(a>COLS/ROWS){w=COLS;h=Math.round(COLS/a);}else{h=ROWS;w=Math.round(ROWS*a);}}
+    else if(mode==='stretch'){w=COLS;h=ROWS;}
+    else{w=Math.min(img.width,COLS);h=Math.min(img.height,ROWS);}
+    canvas.width=w;canvas.height=h;
+    const ctx=canvas.getContext('2d'); ctx.drawImage(img,0,0,w,h);
+    const imgData=ctx.getImageData(0,0,w,h);
+    const pixels=[];
+    for(let r=0;r<h;r++){pixels[r]=[];for(let c=0;c<w;c++){
+      const i=(r*w+c)*4; const a=imgData.data[i+3]/255;
+      if(a<0.1){pixels[r][c]=null;continue;}
+      pixels[r][c]='rgb('+Math.round(imgData.data[i]*a)+','+Math.round(imgData.data[i+1]*a)+','+Math.round(imgData.data[i+2]*a)+')';
+    }}
+    pendingImg=pixels;
+    document.getElementById('imgPlaceBtn').disabled=false;
+  };
+  img.src=URL.createObjectURL(file);
+}
+
+function addImageLayer(r, c) {
+  saveUndo();
+  if(!pendingImg) return;
+  const id='img_'+(++layerIdN);
+  const layer={id,type:'image',vis:true,pixels:pendingImg,x:c,y:r};
+  dynLayers.push(layer);
+  addLayerUI(layer,'🖼','Image');
+  pendingImg=null;
+  document.getElementById('imgPlaceBtn').disabled=true;
+  render();
+}
+
+// ═══════════════════════════════════════════
+// LAYER UI
+// ═══════════════════════════════════════════
+function addLayerUI(layer, icon, name) {
+  const list=document.getElementById('lyList');
+  const el=document.createElement('div');
+  el.className='ly'; el.dataset.lyId=layer.id; el.style.flexWrap='wrap';
+
+  let ctrl='';
+
+  // Text inline controls
+  if(layer.type==='text'){
+    const spdVal=[0.5,1,2,4,8].indexOf(layer.scrollSpeed);
+    ctrl=`<div class="ly-ctrl">
+      <div class="row"><span class="lbl" style="margin:0;min-width:30px">Text</span>
+        <input type="text" value="${layer.text}" onchange="updLy('${layer.id}','text',this.value)" style="flex:1">
+      </div>
+      <div class="row"><span class="lbl" style="margin:0">Color</span>
+        <input type="color" value="${layer.color}" onchange="updLy('${layer.id}','color',this.value)" style="width:28px;height:22px">
+        <div class="sw rainbow ${layer.rainbow?'on':''}" onclick="togLyRainbow('${layer.id}',this)" style="width:20px;height:20px;flex-shrink:0" title="Rainbow"></div>
+      </div>
+      <label class="chk"><input type="checkbox" ${layer.scroll?'checked':''} onchange="updLy('${layer.id}','scroll',this.checked)"> Scroll</label>
+      <div class="row"><span class="lbl" style="margin:0">Speed</span>
+        <input type="range" min="1" max="5" value="${(spdVal>=0?spdVal:2)+1}" oninput="updLySpd('${layer.id}',this.value)" style="flex:1">
+      </div>
+    </div>`;
+  }
+
+  // VU static controls
+  if(layer.type==='vu' && layer.vuMode==='static'){
+    const pct=Math.round((vuStates[layer.id]?vuStates[layer.id].levels[0]:0.5)*100);
+    ctrl=`<div class="ly-ctrl">
+      <div class="row">
+        <button class="btn btn-sm" onclick="adjVU('${layer.id}',-5)">−</button>
+        <input type="range" min="0" max="100" value="${pct}" oninput="setVU('${layer.id}',this.value)" data-vu="${layer.id}" style="flex:1">
+        <span class="vu-val" data-vuv="${layer.id}">${pct}%</span>
+        <button class="btn btn-sm" onclick="adjVU('${layer.id}',5)">+</button>
+      </div>
+      <div class="row" style="justify-content:center;gap:4px;">
+        <button class="btn btn-sm" onclick="setVU('${layer.id}',0)">Empty</button>
+        <button class="btn btn-sm" onclick="setVU('${layer.id}',50)">50%</button>
+        <button class="btn btn-sm" onclick="setVU('${layer.id}',100)">Full</button>
+      </div>
+    </div>`;
+  }
+
+  // Image/logo walk animation controls
+  if(layer.type==='image'){
+    const wspd = layer.walkSpeed||1;
+    ctrl=`<div class="ly-ctrl">
+      <label class="chk"><input type="checkbox" ${layer.walk?'checked':''} onchange="updLy('${layer.id}','walk',this.checked)"> 🚶 Walk across display</label>
+      <div class="row" style="${layer.walk?'':'display:none'}" data-walk-speed="${layer.id}">
+        <span class="lbl" style="margin:0">Speed</span>
+        <input type="range" min="1" max="10" value="${wspd}" oninput="updLy('${layer.id}','walkSpeed',parseFloat(this.value))" style="flex:1">
+      </div>
+    </div>`;
+  }
+
+  el.innerHTML=`
+    <span class="ly-icon">${icon}</span>
+    <span class="ly-name">${name}</span>
+    <div class="ly-acts">
+      <div class="ly-move">
+        <button onclick="event.stopPropagation();moveLayer('${layer.id}',-1,0)" title="Move up">▲</button>
+        <button onclick="event.stopPropagation();moveLayer('${layer.id}',1,0)" title="Move down">▼</button>
+        <button onclick="event.stopPropagation();moveLayer('${layer.id}',0,-1)" title="Move left">◀</button>
+        <button onclick="event.stopPropagation();moveLayer('${layer.id}',0,1)" title="Move right">▶</button>
+      </div>
+      <div class="ly-vis" onclick="togDynVis('${layer.id}',this)">👁</div>
+      <button class="btn btn-sm" onclick="rmLy('${layer.id}')">✕</button>
+    </div>
+    ${ctrl}`;
+  list.appendChild(el);
+  updateFundraiserLayerList();
+}
+
+function togVis(name, el) { layers[name].vis=!layers[name].vis; el.classList.toggle('off'); render(); }
+function togDynVis(id, el) { const l=dynLayers.find(l=>l.id===id); if(l){l.vis=!l.vis;el.classList.toggle('off');render();} }
+
+function addDrawLayer() {
+  saveUndo();
+  const id='draw_'+(++layerIdN);
+  const drawCount = dynLayers.filter(l=>l.type==='draw').length;
+  const layer = {
+    id, type:'draw', vis:true,
+    name: 'Draw ' + (drawCount+1),
+    data: Array.from({length:ROWS}, ()=>Array(COLS).fill(null))
+  };
+  dynLayers.push(layer);
+
+  // Add to layer UI
+  const list=document.getElementById('lyList');
+  const el=document.createElement('div');
+  el.className='ly active-draw'; el.dataset.lyId=layer.id; el.style.flexWrap='wrap'; el.style.cursor='pointer';
+  el.innerHTML=`
+    <span class="ly-icon">🖌</span>
+    <span class="ly-name">${layer.name}</span>
+    <div class="ly-acts">
+      <div class="ly-vis" onclick="event.stopPropagation();togDynVis('${layer.id}',this)">👁</div>
+      <button class="btn btn-sm" onclick="event.stopPropagation();rmDrawLy('${layer.id}')">✕</button>
+    </div>`;
+  el.addEventListener('click', function(e) {
+    if(e.target.closest('.ly-acts')) return;
+    selectDrawLayer(layer.id);
+  });
+  list.appendChild(el);
+
+  // Select it
+  selectDrawLayer(layer.id);
+  updateFundraiserLayerList();
+  render();
+}
+
+function selectDrawLayer(id) {
+  activeDrawLayer = id;
+  // Update UI highlights
+  document.querySelectorAll('[data-ly-id]').forEach(el=>{
+    if(el.dataset.lyId.startsWith('draw_')) el.classList.toggle('active-draw', el.dataset.lyId===id);
+  });
+}
+
+function rmDrawLy(id) {
+  // Don't allow removing the last draw layer
+  const drawLayers = dynLayers.filter(l=>l.type==='draw');
+  if(drawLayers.length<=1) return;
+  saveUndo();
+  const i=dynLayers.findIndex(l=>l.id===id); if(i>=0) dynLayers.splice(i,1);
+  fundIncluded.delete(id);
+  const el=document.querySelector('[data-ly-id="'+id+'"]'); if(el) el.remove();
+  // If we removed the active one, switch to the last remaining draw layer
+  if(activeDrawLayer===id) {
+    const remaining = dynLayers.filter(l=>l.type==='draw');
+    if(remaining.length>0) selectDrawLayer(remaining[remaining.length-1].id);
+  }
+  updateFundraiserLayerList();
+  render();
+}
+function rmLy(id) {
+  saveUndo();
+  const i=dynLayers.findIndex(l=>l.id===id); if(i>=0) dynLayers.splice(i,1);
+  delete vuStates[id];
+  fundIncluded.delete(id);
+  const el=document.querySelector('[data-ly-id="'+id+'"]'); if(el) el.remove();
+  updateFundraiserLayerList();
+  stopMicInput(); // Stop mic if no mic VU layers remain
+  render();
+}
+
+function updLy(id,prop,val) {
+  const l=dynLayers.find(l=>l.id===id); if(!l) return;
+  l[prop]=val;
+  if(prop==='text'){const el=document.querySelector('[data-ly-id="'+id+'"] .ly-name');if(el)el.textContent='"'+val.substring(0,12)+'"';}
+  render();
+}
+function updLySpd(id,val) {
+  const l=dynLayers.find(l=>l.id===id); if(!l) return;
+  l.scrollSpeed=[0.5,1,2,4,8][val-1]; render();
+}
+function togLyRainbow(id,el) {
+  const l=dynLayers.find(l=>l.id===id); if(!l) return;
+  l.rainbow=!l.rainbow; el.classList.toggle('on'); render();
+}
+
+function setVU(id, val) {
+  const s=vuStates[id]; if(!s) return;
+  const v=Math.max(0,Math.min(100,parseInt(val)))/100;
+  s.levels[0]=v;
+  const slider=document.querySelector('[data-vu="'+id+'"]');
+  const disp=document.querySelector('[data-vuv="'+id+'"]');
+  if(slider) slider.value=Math.round(v*100);
+  if(disp) disp.textContent=Math.round(v*100)+'%';
+  render();
+}
+function adjVU(id, delta) {
+  const s=vuStates[id]; if(!s) return;
+  setVU(id, Math.round(s.levels[0]*100)+delta);
+}
+
+function setBg(hex) {
+  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  layers.bg.color=(r===0&&g===0&&b===0)?null:'rgb('+r+','+g+','+b+')';
+  render();
+}
+
+function clearMatrix() {
+  layers.bg.color=null; document.getElementById('bgColor').value='#000000';
+  dynLayers.length=0; Object.keys(vuStates).forEach(k=>delete vuStates[k]);
+  activeDrawLayer=null;
+  const list=document.getElementById('lyList');
+  list.querySelectorAll('[data-ly-id]').forEach(el=>el.remove());
+  // Recreate default draw layer
+  addDrawLayer();
+  render();
+}
+
+// ═══════════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════════
+function setActivePanel(id) {
+  document.querySelectorAll('.pnl.pnl-active').forEach(p=>p.classList.remove('pnl-active'));
+  const el = document.getElementById(id);
+  if(el) el.classList.add('pnl-active');
+}
+
+function setTool(t, el) {
+  if(liteBriteMode && !['draw','erase','fill'].includes(t)) return;
+  tool=t; shapeStart=null; shapeEnd=null;
+  document.querySelectorAll('#toolBtns .btn').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+  setActivePanel('pnlDraw');
+}
+
+function pickSw(hex, el) {
+  document.getElementById('brushColor').value=hex;
+  document.querySelectorAll('.swatches .sw').forEach(s=>s.classList.remove('on'));
+  el.classList.add('on');
+}
+
+document.getElementById('brushColor').addEventListener('input',()=>{
+  document.querySelectorAll('.swatches .sw').forEach(s=>s.classList.remove('on'));
+});
+
+function pickTxtRainbow(el) {
+  txtRainbow=!txtRainbow;
+  el.classList.toggle('on', txtRainbow);
+}
+
+function togPnl(hdr) {
+  hdr.nextElementSibling.classList.toggle('shut');
+  hdr.querySelector('.pnl-arrow').classList.toggle('shut');
+}
+
+function togBtnGrp(el) {
+  el.parentElement.querySelectorAll('.btn').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+}
+
+document.getElementById('vuColorMode').addEventListener('change', function(){
+  document.getElementById('vuMonoWrap').style.display=this.value==='mono'?'':'none';
+});
+document.getElementById('txtScroll').addEventListener('change', function(){
+  document.getElementById('txtSpeedWrap').style.display=this.checked?'':'none';
+});
+
+// ═══════════════════════════════════════════
+// BITMAP PRESETS
+// ═══════════════════════════════════════════
+const BITMAPS = {
+  'Heart':    {w:7,h:7,data:[0,1,0,0,1,0,0, 1,1,1,1,1,1,0, 1,1,1,1,1,1,0, 0,1,1,1,1,0,0, 0,1,1,1,1,0,0, 0,0,1,1,0,0,0, 0,0,0,0,0,0,0]},
+  'Star':     {w:7,h:7,data:[0,0,0,1,0,0,0, 0,0,1,1,1,0,0, 1,1,1,1,1,1,1, 0,1,1,1,1,1,0, 0,1,1,0,1,1,0, 0,1,0,0,0,1,0, 1,0,0,0,0,0,1]},
+  'Smiley':   {w:8,h:8,data:[0,0,1,1,1,1,0,0, 0,1,0,0,0,0,1,0, 1,0,1,0,0,1,0,1, 1,0,0,0,0,0,0,1, 1,0,1,0,0,1,0,1, 1,0,0,1,1,0,0,1, 0,1,0,0,0,0,1,0, 0,0,1,1,1,1,0,0]},
+  'Arrow U':  {w:5,h:7,data:[0,0,1,0,0, 0,1,1,1,0, 1,1,1,1,1, 0,0,1,0,0, 0,0,1,0,0, 0,0,1,0,0, 0,0,1,0,0]},
+  'Arrow R':  {w:7,h:5,data:[0,0,0,0,1,0,0, 0,0,0,0,0,1,0, 1,1,1,1,1,1,1, 0,0,0,0,0,1,0, 0,0,0,0,1,0,0]},
+  'Music':    {w:7,h:7,data:[0,0,1,1,1,1,1, 0,0,1,0,0,0,1, 0,0,1,0,0,0,1, 0,0,1,0,0,1,1, 0,0,1,0,0,1,1, 1,1,1,0,0,0,0, 1,1,0,0,0,0,0]},
+  'Check':    {w:7,h:7,data:[0,0,0,0,0,0,1, 0,0,0,0,0,1,1, 0,0,0,0,1,1,0, 1,0,0,1,1,0,0, 1,1,1,1,0,0,0, 0,1,1,0,0,0,0, 0,0,0,0,0,0,0]},
+  'X Mark':   {w:7,h:7,data:[1,0,0,0,0,0,1, 0,1,0,0,0,1,0, 0,0,1,0,1,0,0, 0,0,0,1,0,0,0, 0,0,1,0,1,0,0, 0,1,0,0,0,1,0, 1,0,0,0,0,0,1]},
+  'Diamond':  {w:7,h:7,data:[0,0,0,1,0,0,0, 0,0,1,1,1,0,0, 0,1,1,1,1,1,0, 1,1,1,1,1,1,1, 0,1,1,1,1,1,0, 0,0,1,1,1,0,0, 0,0,0,1,0,0,0]},
+  'Lightning':{w:5,h:9,data:[0,0,0,1,1, 0,0,1,1,0, 0,1,1,0,0, 1,1,1,1,0, 0,0,1,1,0, 0,1,1,0,0, 1,1,0,0,0, 1,0,0,0,0, 0,0,0,0,0]},
+  'Home':     {w:9,h:8,data:[0,0,0,0,1,0,0,0,0, 0,0,0,1,1,1,0,0,0, 0,0,1,1,1,1,1,0,0, 0,1,1,1,1,1,1,1,0, 1,1,1,1,1,1,1,1,1, 0,1,1,0,0,0,1,1,0, 0,1,1,0,0,0,1,1,0, 0,1,1,0,0,0,1,1,0]},
+  'Skull':    {w:8,h:8,data:[0,0,1,1,1,1,0,0, 0,1,1,1,1,1,1,0, 1,1,0,1,1,0,1,1, 1,1,1,1,1,1,1,1, 0,1,1,1,1,1,1,0, 0,0,1,0,0,1,0,0, 0,0,1,0,0,1,0,0, 0,0,0,0,0,0,0,0]},
+};
+
+// Build bitmap preview grid
+(function initBitmaps(){
+  const container=document.getElementById('bmpGrid');
+  for(const[name,bmp] of Object.entries(BITMAPS)){
+    const item=document.createElement('div');
+    item.className='bmp-item';
+    item.onclick=()=>{
+      const color = document.getElementById('bmpColor').value;
+      pendingDragImg={
+        w:bmp.w, h:bmp.h, name:name,
+        getPixel:(r,c)=> bmp.data[r*bmp.w+c] ? color : null
+      };
+      startPlacement('bitmap');
+    };
+    const canvas=document.createElement('canvas');
+    canvas.width=bmp.w; canvas.height=bmp.h;
+    canvas.style.width=(bmp.w*3)+'px'; canvas.style.height=(bmp.h*3)+'px';
+    const ctx=canvas.getContext('2d');
+    for(let r=0;r<bmp.h;r++) for(let c=0;c<bmp.w;c++){
+      ctx.fillStyle=bmp.data[r*bmp.w+c]?'#00e5a0':'#14171f';
+      ctx.fillRect(c,r,1,1);
+    }
+    item.appendChild(canvas);
+    const lbl=document.createElement('span'); lbl.textContent=name;
+    item.appendChild(lbl);
+    container.appendChild(item);
+  }
+})();
+
+// ═══════════════════════════════════════════
+// LOGO PRESETS
+// ═══════════════════════════════════════════
+const logoPresets = [
+  {name:'M Solo',w:22,h:20,pal:["#0044cc"],data:["1111111100000011111111","1111111100000011111111","1111111110000111111111","1111111111001111111111","1111111111001111111111","1111111111111111111111","0111111111111111111110","0111111111111111111110","0111111111111111111110","0111111111111111111110","0111111111111111111110","0111111111111111111110","0111111001111001111110","0111111001111001111110","1111111100000011111111","1111111110000111111111","1111111110000111111111","1111111110000111111111","1111111110000111111111","1111111110000111111111"]},
+  {name:'M Circle',w:23,h:23,pal:["#1e3c82","#184b9e","#ffd60a"],data:["00000001111111110000000","00000111333333311100000","00001133331113333111000","00011331000000013311100","00113300000000000331100","01133000000000000033110","01330011110001111003310","11310012220012221001311","13300012221012221000331","13300012222122221000331","13300002222222220000331","13300002212221220000331","13300002211211220000331","13300012210101221000331","13300012221012221000331","11310012221012221001311","01330011110001111003310","01133000000000000033110","00113300000000000331100","00011331000000013311000","00001133331113333110000","00000111333333311100000","00000001111111110000000"]},
+  {name:'Warrior',w:23,h:23,pal:["#1446a0","#c8b428","#ffffb4","#ffdc00","#6482b4"],data:["00000001111111110000000","00000115555115511100000","00001533552222325110000","00015351144442342351000","00153115425555341135100","01531112522442345113110","01351515344442322415310","15315515522251322421351","15511155111522321241551","13155153444442322551531","13115115122425552422131","13155153515555351225131","13155153425555115551131","13511153224255555241531","15513153253455355221551","15315153453453222221351","01351153453455252225310","01135153412411112223110","00153515312411152255100","00015351312411122511000","00001135112415522110000","00000115112215511100000","00000001111111110000000"]},
+  {name:'Olaf',w:13,h:19,pal:["#ffffff","#1a1a1a","#ff8800","#5a3010"],
+    data:[
+      "0000004000000",
+      "0000044400000",
+      "0000111110000",
+      "0001111111000",
+      "0011111111100",
+      "0011211121100",
+      "0011133311100",
+      "0011132311100",
+      "0011122211100",
+      "0001111111000",
+      "0011111111100",
+      "0140111111041",
+      "1444111111444",
+      "0140111111041",
+      "0011112111100",
+      "0011111111100",
+      "0111111111110",
+      "0111111111110",
+      "0011111111100"
+    ]},
+  {name:'Olaf Walk',w:13,h:19,pal:["#ffffff","#1a1a1a","#ff8800","#5a3010"],
+    data:[
+      "0000004000000",
+      "0000044400000",
+      "0000111110000",
+      "0001111111000",
+      "0011111111100",
+      "0011211121100",
+      "0011133311100",
+      "0011132311100",
+      "0011122211100",
+      "0001111111000",
+      "0011111111100",
+      "1410111111014",
+      "4441111111144",
+      "1410111111014",
+      "0011112111100",
+      "0011111111100",
+      "0111111111110",
+      "0111111111110",
+      "0011111111100"
+    ]},
+];
+
+function decodeLogoPixel(logo, r, c) {
+  if(r<0||r>=logo.h||c<0||c>=logo.w) return null;
+  const ch = logo.data[r].charAt(c);
+  if(ch==='0') return null;
+  return logo.pal[parseInt(ch)-1] || null;
+}
+
+(function initLogos(){
+  const container=document.getElementById('logoGrid');
+  logoPresets.forEach(logo => {
+    if(logo.name === 'Olaf Walk') return; // Hidden — used as 2nd frame for Olaf
+    const item=document.createElement('div');
+    item.className='bmp-item';
+    item.onclick=()=>{
+      pendingDragImg={
+        w:logo.w, h:logo.h, name:logo.name,
+        getPixel:(r,c)=> decodeLogoPixel(logo,r,c)
+      };
+      startPlacement('logo');
+    };
+    const canvas=document.createElement('canvas');
+    canvas.width=logo.w; canvas.height=logo.h;
+    canvas.style.width=(logo.w*3)+'px'; canvas.style.height=(logo.h*3)+'px';
+    const ctx=canvas.getContext('2d');
+    for(let r=0;r<logo.h;r++) for(let c=0;c<logo.w;c++){
+      const color = decodeLogoPixel(logo,r,c);
+      ctx.fillStyle=color||'#14171f';
+      ctx.fillRect(c,r,1,1);
+    }
+    item.appendChild(canvas);
+    const lbl=document.createElement('span'); lbl.textContent=logo.name;
+    item.appendChild(lbl);
+    container.appendChild(item);
+  });
+})();
+
+// ═══════════════════════════════════════════
+// WEBSOCKET
+// ═══════════════════════════════════════════
+let ws=null, wsOk=false, reconTimer=null, lastSend=0;
+const THROTTLE=33;
+
+function connectWS(){
+  const host=location.hostname||'192.168.4.1';
+  const port=location.port||'80';
+  updHW('try');
+  try{ws=new WebSocket('ws://'+host+':'+port+'/ws');ws.binaryType='arraybuffer';}catch(e){updHW('off');schedRecon();return;}
+  ws.onopen=()=>{wsOk=true;updHW('ok');if(reconTimer){clearTimeout(reconTimer);reconTimer=null;}ws.send('info');ws.send('scene_list');};
+  ws.onclose=()=>{wsOk=false;updHW('off');schedRecon();};
+  ws.onerror=()=>{wsOk=false;updHW('off');};
+  ws.onmessage=e=>{
+    if(typeof e.data==='string'){
+      if(e.data.startsWith('info:')) parseInfo(e.data.substring(5));
+      else if(e.data.startsWith('scene_')) handleSceneMessage(e.data);
+    }
+  };
+}
+
+function schedRecon(){if(reconTimer)return;reconTimer=setTimeout(()=>{reconTimer=null;if(!wsOk)connectWS();},3000);}
+
+function updHW(s){
+  const d=document.getElementById('hwDot'),l=document.getElementById('hwLbl');
+  d.className='hw-dot';l.className='hw-lbl';
+  if(s==='ok'){d.classList.add('ok');l.classList.add('ok');l.textContent='Connected';}
+  else if(s==='try'){d.classList.add('try');l.textContent='Connecting...';}
+  else l.textContent='Disconnected';
+}
+
+function parseInfo(data){
+  const o={};data.split(',').forEach(p=>{const[k,v]=p.split('=');o[k]=v;});
+  document.getElementById('fpsDisp').textContent='FPS: '+(o.fps||0);
+  if(o.heap)document.getElementById('heapDisp').textContent='RAM: '+Math.round(o.heap/1024)+'KB';
+}
+
+function hexToRGB(hex){
+  if(!hex) return[0,0,0];
+  if(hex.startsWith('rgb')){const m=hex.match(/(\d+)/g);return m?[+m[0],+m[1],+m[2]]:[0,0,0];}
+  if(hex.startsWith('hsl')){return hexToRGB(hslToHex(hex));}
+  return[parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16)];
+}
+
+function sendFrame(buf){
+  if(!wsOk||!ws||ws.readyState!==WebSocket.OPEN) return;
+  const now=Date.now(); if(now-lastSend<THROTTLE) return; lastSend=now;
+  const d=new Uint8Array(1+ROWS*COLS*3); d[0]=0x01;
+  let i=1;
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+    const[red,green,blue]=hexToRGB(buf?buf[r][c]:null);
+    d[i++]=red; d[i++]=green; d[i++]=blue;
+  }
+  try{ws.send(d.buffer);}catch(e){}
+}
+
+function sendBrightness(v){
+  if(!wsOk||!ws||ws.readyState!==WebSocket.OPEN) return;
+  try{ws.send(new Uint8Array([0x03,parseInt(v)]).buffer);}catch(e){}
+}
+
+setInterval(()=>{if(wsOk&&ws&&ws.readyState===WebSocket.OPEN){ws.send('ping');ws.send('info');}},10000);
+
+// ═══════════════════════════════════════════
+// SHOW IT! — Manual push to display
+// ═══════════════════════════════════════════
+function pushToDisplay() {
+  const buf = buildFrame();
+  sendFrame(buf);
+  const btn = document.getElementById('showItBtn');
+  btn.classList.add('pushed');
+  setTimeout(()=>btn.classList.remove('pushed'),300);
+}
+
+function clearDisplay() {
+  clearMatrix();
+  if(wsOk && ws && ws.readyState===WebSocket.OPEN) {
+    try { ws.send(new Uint8Array([0x04]).buffer); } catch(e) {}
+  }
+}
+
+function buildFrame() {
+  const buf = Array.from({length:ROWS}, ()=>Array(COLS).fill(null));
+  if(layers.bg.vis && layers.bg.color)
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) buf[r][c]=layers.bg.color;
+  for(const ly of dynLayers){
+    if(!ly.vis) continue;
+    if(ly.type==='draw') {
+      for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++)
+        if(ly.data[r][c]) buf[r][c]=ly.data[r][c];
+    }
+    else if(ly.type==='vu'){
+      if(ly.vuMode==='animated') simVU(ly); else if(ly.vuMode==='mic') micVU(ly);
+      renderVU(ly,buf);
+    }
+    else if(ly.type==='text') renderText(ly,buf);
+    else if(ly.type==='image') renderImage(ly,buf);
+  }
+  if(shapeStart && shapeEnd) {
+    const color = getColor();
+    let pts = [];
+    if(tool==='line') pts = getLinePixels(shapeStart.r,shapeStart.c,shapeEnd.r,shapeEnd.c);
+    else if(tool==='rect') pts = getRectPixels(shapeStart.r,shapeStart.c,shapeEnd.r,shapeEnd.c);
+    else if(tool==='circle') pts = getCirclePixels(shapeStart.r,shapeStart.c,shapeEnd.r,shapeEnd.c);
+    pts.forEach(p => { if(p.r>=0&&p.r<ROWS&&p.c>=0&&p.c<COLS) buf[p.r][p.c] = color; });
+  }
+  return buf;
+}
+
+// ═══════════════════════════════════════════
+// SAVE / LOAD
+// ═══════════════════════════════════════════
+function getDesignData() {
+  return {
+    v: 2,
+    bg: layers.bg.color,
+    dynLayers: dynLayers.map(l => {
+      const o = Object.assign({}, l);
+      if(l.type==='vu' && vuStates[l.id]) o._vuState = vuStates[l.id];
+      return o;
+    }),
+    activeDrawLayer: activeDrawLayer
+  };
+}
+
+function applyDesignData(data) {
+  // Clear everything
+  layers.bg.color=null; document.getElementById('bgColor').value='#000000';
+  dynLayers.length=0; Object.keys(vuStates).forEach(k=>delete vuStates[k]);
+  activeDrawLayer=null;
+  const list=document.getElementById('lyList');
+  list.querySelectorAll('[data-ly-id]').forEach(el=>el.remove());
+
+  if(data.bg) { layers.bg.color = data.bg; document.getElementById('bgColor').value = rgbToHex(data.bg); }
+
+  // Handle v1 format (old single draw layer)
+  if(data.v===1 && data.draw) {
+    const id='draw_'+(++layerIdN);
+    const layer={id, type:'draw', vis:true, name:'Draw 1', data:data.draw};
+    dynLayers.push(layer);
+    addDrawLayerUI(layer);
+    activeDrawLayer=id;
+  }
+
+  if(data.dynLayers) {
+    data.dynLayers.forEach(l => {
+      dynLayers.push(l);
+      if(l._vuState) { vuStates[l.id] = l._vuState; delete l._vuState; }
+      layerIdN = Math.max(layerIdN, parseInt(l.id.split('_')[1])||0);
+      if(l.type==='draw') {
+        addDrawLayerUI(l);
+      } else {
+        const icon = l.type==='text'?'✎':l.type==='vu'?(l.vuMode==='static'?'🌡':'📊'):l.type==='image'?'🖼':'⬡';
+        const name = l.type==='text'?'"'+l.text.substring(0,12)+'"':l.type==='vu'?'VU':'Image';
+        addLayerUI(l, icon, name);
+      }
+    });
+  }
+
+  if(data.activeDrawLayer && dynLayers.find(l=>l.id===data.activeDrawLayer)) {
+    selectDrawLayer(data.activeDrawLayer);
+  } else {
+    const firstDraw = dynLayers.find(l=>l.type==='draw');
+    if(firstDraw) selectDrawLayer(firstDraw.id);
+  }
+
+  // If no draw layers exist, create one
+  if(!dynLayers.some(l=>l.type==='draw')) addDrawLayer();
+
+  render();
+}
+
+function addDrawLayerUI(layer) {
+  const list=document.getElementById('lyList');
+  const el=document.createElement('div');
+  el.className='ly'; el.dataset.lyId=layer.id; el.style.flexWrap='wrap'; el.style.cursor='pointer';
+  if(layer.id===activeDrawLayer) el.classList.add('active-draw');
+  el.innerHTML=`
+    <span class="ly-icon">🖌</span>
+    <span class="ly-name">${layer.name||'Draw'}</span>
+    <div class="ly-acts">
+      <div class="ly-move">
+        <button onclick="event.stopPropagation();moveLayer('${layer.id}',-1,0)" title="Move up">▲</button>
+        <button onclick="event.stopPropagation();moveLayer('${layer.id}',1,0)" title="Move down">▼</button>
+        <button onclick="event.stopPropagation();moveLayer('${layer.id}',0,-1)" title="Move left">◀</button>
+        <button onclick="event.stopPropagation();moveLayer('${layer.id}',0,1)" title="Move right">▶</button>
+      </div>
+      <div class="ly-vis${layer.vis?'':' off'}" onclick="event.stopPropagation();togDynVis('${layer.id}',this)">👁</div>
+      <button class="btn btn-sm" onclick="event.stopPropagation();rmDrawLy('${layer.id}')">✕</button>
+    </div>`;
+  el.addEventListener('click', function(e) {
+    if(e.target.closest('.ly-acts')) return;
+    selectDrawLayer(layer.id);
+  });
+  list.appendChild(el);
+}
+
+function rgbToHex(rgb) {
+  if(!rgb || rgb.startsWith('#')) return rgb||'#000000';
+  const m = rgb.match(/(\d+)/g);
+  if(!m) return '#000000';
+  return '#'+m.slice(0,3).map(x=>(+x).toString(16).padStart(2,'0')).join('');
+}
+
+function saveDesign() {
+  try {
+    const data = JSON.stringify(getDesignData());
+    localStorage.setItem('ledmatrix_save', data);
+    document.getElementById('saveStatus').textContent = '✓ Saved to browser (' + Math.round(data.length/1024) + 'KB)';
+    setTimeout(()=>document.getElementById('saveStatus').textContent='', 3000);
+  } catch(e) {
+    document.getElementById('saveStatus').textContent = '✕ Save failed: ' + e.message;
+  }
+}
+
+function loadDesign() {
+  try {
+    const data = localStorage.getItem('ledmatrix_save');
+    if(!data) { document.getElementById('saveStatus').textContent = 'No saved design found'; return; }
+    applyDesignData(JSON.parse(data));
+    document.getElementById('saveStatus').textContent = '✓ Loaded from browser';
+    setTimeout(()=>document.getElementById('saveStatus').textContent='', 3000);
+  } catch(e) {
+    document.getElementById('saveStatus').textContent = '✕ Load failed: ' + e.message;
+  }
+}
+
+function exportJSON() {
+  const data = JSON.stringify(getDesignData());
+  const blob = new Blob([data], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'led-matrix-design.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function importJSON(e) {
+  const file = e.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      applyDesignData(JSON.parse(ev.target.result));
+      document.getElementById('saveStatus').textContent = '✓ Imported ' + file.name;
+      setTimeout(()=>document.getElementById('saveStatus').textContent='', 3000);
+    } catch(err) {
+      document.getElementById('saveStatus').textContent = '✕ Invalid file';
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+// ═══════════════════════════════════════════
+// FUNDRAISER MODAL
+// ═══════════════════════════════════════════
+function toggleFundModal() {
+  const modal = document.getElementById('fundModal');
+  const isOpen = modal.style.display !== 'none';
+  modal.style.display = isOpen ? 'none' : 'block';
+  if(!isOpen) {
+    updateFundraiserLayerList();
+    updatePricing();
+    updateDonVuSelect();
+    updateDonationTracker();
+  }
+}
+
+// ── Modal Dragging ──
+(function(){
+  const hdr = document.getElementById('fundModalDrag');
+  const box = document.getElementById('fundModalBox');
+  let dragging=false, offX=0, offY=0;
+
+  function onDown(ex, ey) {
+    dragging=true;
+    const rect=box.getBoundingClientRect();
+    offX=ex-rect.left; offY=ey-rect.top;
+    // Switch from right-positioned to left-positioned for dragging
+    box.style.left=rect.left+'px'; box.style.top=rect.top+'px'; box.style.right='auto';
+  }
+  function onMove(ex, ey) {
+    if(!dragging) return;
+    let nx=ex-offX, ny=ey-offY;
+    // Keep on screen
+    nx=Math.max(0, Math.min(window.innerWidth-100, nx));
+    ny=Math.max(0, Math.min(window.innerHeight-60, ny));
+    box.style.left=nx+'px'; box.style.top=ny+'px';
+  }
+  function onUp() { dragging=false; }
+
+  hdr.addEventListener('mousedown', e=>{e.preventDefault();onDown(e.clientX,e.clientY);});
+  document.addEventListener('mousemove', e=>{if(dragging){e.preventDefault();onMove(e.clientX,e.clientY);}});
+  document.addEventListener('mouseup', onUp);
+
+  hdr.addEventListener('touchstart', e=>{const t=e.touches[0];onDown(t.clientX,t.clientY);},{passive:true});
+  document.addEventListener('touchmove', e=>{if(dragging){const t=e.touches[0];onMove(t.clientX,t.clientY);}},{passive:true});
+  document.addEventListener('touchend', onUp);
+})();
+
+function switchFundTab(pane, btn) {
+  document.querySelectorAll('.fund-tab').forEach(t=>t.classList.remove('on'));
+  document.querySelectorAll('.fund-pane').forEach(p=>p.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById('fundPane'+pane.charAt(0).toUpperCase()+pane.slice(1)).classList.add('on');
+}
+
+function updateAllFundTabs() {
+  updateFundraiser();
+  updatePricing();
+  updateDonationTracker();
+}
+
+// ═══════════════════════════════════════════
+// TAB 1: CALCULATOR (Function 1)
+// ═══════════════════════════════════════════
+const fundIncluded = new Set();
+
+function updateFundraiserLayerList() {
+  const list = document.getElementById('fundLyList');
+  list.innerHTML = '';
+  updateDonVuSelect();
+  if(dynLayers.length === 0) {
+    list.innerHTML = '<div style="font-size:10px;color:var(--text3)">Add layers to see them here</div>';
+    updateFundraiser();
+    return;
+  }
+  dynLayers.forEach(l => {
+    const pxCount = countLayerPixels(l);
+    const div = document.createElement('div');
+    div.className = 'fund-ly-item';
+    const checked = fundIncluded.has(l.id) ? 'checked' : '';
+    const icon = l.type==='draw'?'🖌':l.type==='text'?'✎':l.type==='vu'?'📊':'🖼';
+    const name = l.name || (l.type==='text'?'"'+l.text.substring(0,10)+'"':l.type==='vu'?'VU Meter':l.type);
+    div.innerHTML = '<label style="display:flex;align-items:center;gap:5px;flex:1;cursor:pointer">' +
+      '<input type="checkbox" ' + checked + ' onchange="toggleFundLayer(\'' + l.id + '\',this.checked)">' +
+      icon + ' ' + name + '</label>' +
+      '<span class="fund-px" data-fund-px="' + l.id + '">' + pxCount + 'px</span>';
+    list.appendChild(div);
+  });
+  updateFundraiser();
+}
+
+function refreshFundraiserCounts() {
+  dynLayers.forEach(l => {
+    const el = document.querySelector('[data-fund-px="' + l.id + '"]');
+    if(el) el.textContent = countLayerPixels(l) + 'px';
+  });
+  updateFundraiser();
+}
+
+function countLayerPixels(layer) {
+  let count = 0;
+  if(layer.type === 'draw' && layer.data) {
+    for(let r=0;r<ROWS;r++)
+      for(let c=0;c<COLS;c++)
+        if(layer.data[r][c]) count++;
+  }
+  else if(layer.type === 'image' && layer.pixels) {
+    for(let r=0;r<layer.pixels.length;r++)
+      for(let c=0;c<layer.pixels[r].length;c++)
+        if(layer.pixels[r][c]) count++;
+  }
+  else if(layer.type === 'text') {
+    const bmp = getTextBmp(layer.text, layer.size);
+    for(let r=0;r<bmp.length;r++)
+      for(let c=0;c<bmp[r].length;c++)
+        if(bmp[r][c]) count++;
+  }
+  else if(layer.type === 'vu') {
+    const s = vuStates[layer.id];
+    if(s) {
+      if(layer.orient==='vertical') {
+        const bw = Math.max(1,Math.floor(layer.w/layer.bars));
+        for(let b=0;b<layer.bars;b++) {
+          const filled = Math.round(s.levels[b]*layer.h);
+          count += filled * bw;
+        }
+      } else {
+        const bh = Math.max(1,Math.floor(layer.h/layer.bars));
+        for(let b=0;b<layer.bars;b++) {
+          const filled = Math.round(s.levels[b]*layer.w);
+          count += filled * bh;
+        }
+      }
+    }
+  }
+  return count;
+}
+
+function toggleFundLayer(id, checked) {
+  if(checked) fundIncluded.add(id);
+  else fundIncluded.delete(id);
+  updateFundraiser();
+}
+
+function updateFundraiser() {
+  const goal = parseFloat(document.getElementById('fundGoal').value) || 0;
+  let totalPx = 0;
+  let filledPx = 0;
+  fundIncluded.forEach(id => {
+    const layer = dynLayers.find(l => l.id === id);
+    if(!layer) return;
+    if(layer.type === 'draw' && layer.data) {
+      for(let r=0;r<ROWS;r++)
+        for(let c=0;c<COLS;c++) {
+          totalPx++;
+          if(layer.data[r][c]) filledPx++;
+        }
+    }
+    else if(layer.type === 'image' && layer.pixels) {
+      for(let r=0;r<layer.pixels.length;r++)
+        for(let c=0;c<layer.pixels[r].length;c++) {
+          totalPx++;
+          if(layer.pixels[r][c]) filledPx++;
+        }
+    }
+    else if(layer.type === 'text') {
+      const bmp = getTextBmp(layer.text, layer.size);
+      for(let r=0;r<bmp.length;r++)
+        for(let c=0;c<bmp[r].length;c++) {
+          totalPx++;
+          if(bmp[r][c]) filledPx++;
+        }
+    }
+    else if(layer.type === 'vu') {
+      const area = layer.w * layer.h;
+      totalPx += area;
+      const s = vuStates[layer.id];
+      if(s) {
+        if(layer.orient==='vertical') {
+          const bw = Math.max(1,Math.floor(layer.w/layer.bars));
+          for(let b=0;b<layer.bars;b++) filledPx += Math.round(s.levels[b]*layer.h) * bw;
+        } else {
+          const bh = Math.max(1,Math.floor(layer.h/layer.bars));
+          for(let b=0;b<layer.bars;b++) filledPx += Math.round(s.levels[b]*layer.w) * bh;
+        }
+      }
+    }
+  });
+
+  const perPx = totalPx > 0 ? goal / totalPx : 0;
+  const raised = perPx * filledPx;
+
+  document.getElementById('fundTotalPx').textContent = totalPx.toLocaleString();
+  document.getElementById('fundPerPx').textContent = '$' + perPx.toFixed(2);
+  document.getElementById('fundFilledPx').textContent = filledPx.toLocaleString();
+  document.getElementById('fundRaised').textContent = '$' + raised.toFixed(2);
+}
+
+// ═══════════════════════════════════════════
+// TAB 2: PIXEL PRICING (Function 2)
+// ═══════════════════════════════════════════
+function updatePricing() {
+  const goal = parseFloat(document.getElementById('fundGoal').value) || 0;
+  const price = parseFloat(document.getElementById('pxPrice').value) || 1;
+  const group = parseInt(document.getElementById('pxGroup').value) || 1;
+
+  const effectivePerPx = price / group;
+  const totalPxNeeded = effectivePerPx > 0 ? Math.ceil(goal / effectivePerPx) : 0;
+  const totalGroups = group > 0 ? Math.ceil(totalPxNeeded / group) : 0;
+
+  document.getElementById('pricePerPx').textContent = '$' + effectivePerPx.toFixed(2);
+  document.getElementById('pxNeeded').textContent = totalPxNeeded.toLocaleString();
+  document.getElementById('groupsNeeded').textContent = totalGroups.toLocaleString();
+  document.getElementById('pxAvail').textContent = (ROWS * COLS).toLocaleString();
+}
+
+// ═══════════════════════════════════════════
+// TAB 3: DONATION TRACKER (Function 3)
+// ═══════════════════════════════════════════
+let donationTotal = 0;
+let donationCount = 0;
+const donationHistory = []; // stack of amounts for undo
+
+function addDonation(amount, btnEl) {
+  donationTotal += amount;
+  donationCount++;
+  donationHistory.push(amount);
+  if(btnEl) { btnEl.classList.add('flash'); setTimeout(()=>btnEl.classList.remove('flash'),300); }
+  updateDonationTracker();
+}
+
+function addCustomDonation() {
+  const input = document.getElementById('donCustomAmt');
+  const amount = parseFloat(input.value);
+  if(!amount || amount <= 0) return;
+  addDonation(amount, null);
+  input.value = '';
+}
+
+function setDonationTotal() {
+  const input = document.getElementById('donManualTotal');
+  const val = parseFloat(input.value);
+  if(isNaN(val) || val < 0) return;
+  donationHistory.push(donationTotal - val); // store delta for undo
+  donationTotal = val;
+  input.value = '';
+  updateDonationTracker();
+}
+
+function undoDonation() {
+  if(donationHistory.length === 0) return;
+  const last = donationHistory.pop();
+  donationTotal -= last;
+  if(donationTotal < 0) donationTotal = 0;
+  if(donationCount > 0) donationCount--;
+  updateDonationTracker();
+}
+
+function resetDonations() {
+  donationTotal = 0;
+  donationCount = 0;
+  donationHistory.length = 0;
+  updateDonationTracker();
+}
+
+function updateDonVuSelect() {
+  const sel = document.getElementById('donVuLink');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">None</option>';
+  dynLayers.filter(l => l.type==='vu' && l.vuMode==='static').forEach(l => {
+    const opt = document.createElement('option');
+    opt.value = l.id;
+    opt.textContent = '🌡 ' + (l.orient==='vertical'?'Vert':'Horiz') + ' VU (' + l.w + '×' + l.h + ')';
+    if(l.id === current) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function updateDonationTracker() {
+  const goal = parseFloat(document.getElementById('fundGoal').value) || 0;
+  const pct = goal > 0 ? Math.min(100, (donationTotal / goal) * 100) : 0;
+  const remaining = Math.max(0, goal - donationTotal);
+
+  document.getElementById('donTotal').textContent = '$' + donationTotal.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+  document.getElementById('donRemaining').textContent = '$' + remaining.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+  document.getElementById('donCount').textContent = donationCount.toLocaleString();
+  document.getElementById('donProgress').style.width = pct + '%';
+  document.getElementById('donProgressLbl').textContent = pct.toFixed(1) + '%';
+
+  // Drive linked VU meter
+  const vuId = document.getElementById('donVuLink').value;
+  if(vuId) {
+    const s = vuStates[vuId];
+    if(s) {
+      const level = goal > 0 ? Math.min(1, donationTotal / goal) : 0;
+      s.levels[0] = level;
+      // Update the slider/display if visible
+      const slider = document.querySelector('[data-vu="' + vuId + '"]');
+      const disp = document.querySelector('[data-vuv="' + vuId + '"]');
+      if(slider) slider.value = Math.round(level * 100);
+      if(disp) disp.textContent = Math.round(level * 100) + '%';
+      render();
+    }
+  }
+
+  // Update % text on display if enabled
+  if(donPctLayerId) updateDonPctLayer();
+}
+
+// ═══════════════════════════════════════════
+// DONATION % ON DISPLAY
+// ═══════════════════════════════════════════
+let donPctLayerId = null; // Track the auto-managed text layer
+
+function toggleDonPctDisplay(on) {
+  document.getElementById('donPctOptions').style.display = on ? '' : 'none';
+  if(on) {
+    createDonPctLayer();
+  } else {
+    removeDonPctLayer();
+  }
+}
+
+function createDonPctLayer() {
+  // Remove existing if any
+  removeDonPctLayer();
+
+  const goal = parseFloat(document.getElementById('fundGoal').value) || 0;
+  const pct = goal > 0 ? Math.min(100, (donationTotal / goal) * 100) : 0;
+  const pctText = Math.round(pct) + '%';
+
+  const id = 'donpct_' + (++layerIdN);
+  donPctLayerId = id;
+
+  const color = document.getElementById('donPctColor').value;
+  const size = document.getElementById('donPctSize').value;
+  const scroll = document.getElementById('donPctScroll').checked;
+
+  // Center the text vertically
+  const fontH = size==='small' ? 5 : size==='large' ? 9 : 7;
+  const y = Math.floor((ROWS - fontH) / 2);
+
+  // Center horizontally (approximate: each char ~6px wide)
+  const charW = pctText.length * 6;
+  const x = Math.max(0, Math.floor((COLS - charW) / 2));
+
+  const layer = {
+    id, type:'text', vis:true,
+    text: pctText,
+    color: color,
+    rainbow: false,
+    x: x, y: y,
+    size: size,
+    scroll: scroll,
+    scrollSpeed: 1,
+    _isDonPct: true  // marker so we know this is auto-managed
+  };
+
+  dynLayers.push(layer);
+  addLayerUI(layer, '🎯', pctText);
+  render();
+}
+
+function removeDonPctLayer() {
+  if(!donPctLayerId) return;
+  const idx = dynLayers.findIndex(l => l.id === donPctLayerId);
+  if(idx >= 0) {
+    dynLayers.splice(idx, 1);
+    const el = document.querySelector('[data-ly-id="' + donPctLayerId + '"]');
+    if(el) el.remove();
+  }
+  donPctLayerId = null;
+  render();
+}
+
+function updateDonPctLayer() {
+  if(!donPctLayerId) return;
+  const ly = dynLayers.find(l => l.id === donPctLayerId);
+  if(!ly) { donPctLayerId = null; return; }
+
+  const goal = parseFloat(document.getElementById('fundGoal').value) || 0;
+  const pct = goal > 0 ? Math.min(100, (donationTotal / goal) * 100) : 0;
+  const pctText = Math.round(pct) + '%';
+
+  ly.text = pctText;
+  ly.color = document.getElementById('donPctColor').value;
+  ly.size = document.getElementById('donPctSize').value;
+  ly.scroll = document.getElementById('donPctScroll').checked;
+
+  // Only auto-center if position hasn't been manually set
+  if(!ly._manualPos) {
+    const fontH = ly.size==='small' ? 5 : ly.size==='large' ? 9 : 7;
+    ly.y = Math.floor((ROWS - fontH) / 2);
+    const charW = pctText.length * 6;
+    ly.x = Math.max(0, Math.floor((COLS - charW) / 2));
+  }
+
+  // Update layer UI label
+  const nameEl = document.querySelector('[data-ly-id="' + donPctLayerId + '"] .ly-name');
+  if(nameEl) nameEl.textContent = pctText;
+
+  render();
+}
+
+function repositionDonPct() {
+  if(!donPctLayerId) return;
+  // Hide the fundraiser modal so user can click the grid
+  document.getElementById('fundModal').style.display = 'none';
+  cancelPlace();
+  placeMode = 'donpct';
+  const banner = document.getElementById('placeBanner');
+  banner.textContent = 'Click on matrix to place percentage display — ESC to cancel';
+  grid.style.cursor = 'pointer';
+  banner.classList.add('on');
+}
+
+// ═══════════════════════════════════════════
+// EVENT PRESET SCENES
+// ═══════════════════════════════════════════
+
+function loadEventPreset(preset) {
+  saveUndo();
+
+  // Clear everything
+  dynLayers.length = 0;
+  Object.keys(vuStates).forEach(k => delete vuStates[k]);
+  activeDrawLayer = null;
+  donPctLayerId = null;
+  const list = document.getElementById('lyList');
+  list.querySelectorAll('[data-ly-id]').forEach(el => el.remove());
+
+  switch(preset) {
+    case 'thermometer': buildThermometerPreset(); break;
+    case 'scoreboard': buildScoreboardPreset(); break;
+    case 'interactive': buildInteractivePreset(); break;
+    case 'celebration': buildCelebrationPreset(); break;
+  }
+
+  rebuildLayerUI();
+  render();
+}
+
+// ─── PRESET 1: THERMOMETER ────────────────────────
+// Left: tall VU meter thermometer (donation-linked)
+// Center: big scrolling percentage
+// Right: Mariemont M logo
+function buildThermometerPreset() {
+  // Dark blue background
+  layers.bg.color = '#050a1e';
+  document.getElementById('bgColor').value = '#050a1e';
+
+  // 1. VU thermometer — left side, full height
+  const vuId = 'vu_' + (++layerIdN);
+  dynLayers.push({
+    id: vuId, type: 'vu', vis: true, vuMode: 'static',
+    orient: 'vertical', bars: 1,
+    colorMode: 'gradient',
+    monoColor: '#00e5a0',
+    x: 0, y: 0, w: 5, h: 23,
+  });
+  vuStates[vuId] = { levels: [0], peaks: [0], decay: [0] };
+
+  // Auto-link to donation tracker
+  setTimeout(() => {
+    updateDonVuSelect();
+    const sel = document.getElementById('donVuLink');
+    if(sel) { sel.value = vuId; }
+  }, 100);
+
+  // 2. Scrolling "DONATE TODAY" text — top area
+  dynLayers.push({
+    id: 'txt_' + (++layerIdN), type: 'text', vis: true,
+    text: 'DONATE TODAY!', color: '#ffd60a',
+    rainbow: false, x: 8, y: 1,
+    size: 'small', scroll: true, scrollSpeed: 0.75,
+  });
+
+  // 3. Percentage text — center, large
+  const pctId = 'donpct_' + (++layerIdN);
+  donPctLayerId = pctId;
+  dynLayers.push({
+    id: pctId, type: 'text', vis: true,
+    text: '0%', color: '#00e5a0',
+    rainbow: false, x: 17, y: 8,
+    size: 'large', scroll: false, scrollSpeed: 1,
+    _isDonPct: true, _manualPos: true,
+  });
+  // Enable the checkbox in the UI
+  setTimeout(() => {
+    const cb = document.getElementById('donShowPct');
+    if(cb) { cb.checked = true; document.getElementById('donPctOptions').style.display = ''; }
+  }, 100);
+
+  // 4. "GOAL: $___" scrolling at bottom
+  const goal = document.getElementById('fundGoal').value || '1000';
+  dynLayers.push({
+    id: 'txt_' + (++layerIdN), type: 'text', vis: true,
+    text: 'GOAL: $' + goal, color: '#4488ff',
+    rainbow: false, x: 8, y: 17,
+    size: 'small', scroll: true, scrollSpeed: 0.5,
+  });
+
+  // 5. Mariemont M logo — right side
+  const logo = logoPresets[0]; // M Solo
+  const mPixels = [];
+  for(let r = 0; r < logo.h; r++) {
+    mPixels[r] = [];
+    for(let c = 0; c < logo.w; c++) {
+      mPixels[r][c] = decodeLogoPixel(logo, r, c);
+    }
+  }
+  dynLayers.push({
+    id: 'logo_' + (++layerIdN), type: 'image', vis: true,
+    pixels: mPixels, x: 24, y: 1,
+  });
+}
+
+// ─── PRESET 2: SCOREBOARD ─────────────────────────
+// Clean stats display: big dollar amount + percentage bar
+// Professional look for formal events
+function buildScoreboardPreset() {
+  layers.bg.color = '#08001a';
+  document.getElementById('bgColor').value = '#08001a';
+
+  // 1. "RAISED" label top
+  dynLayers.push({
+    id: 'txt_' + (++layerIdN), type: 'text', vis: true,
+    text: 'RAISED', color: '#8888aa',
+    rainbow: false, x: 1, y: 0,
+    size: 'small', scroll: false, scrollSpeed: 1,
+  });
+
+  // 2. Dollar amount — will show $0 initially, updates with donations
+  const pctId = 'donpct_' + (++layerIdN);
+  donPctLayerId = pctId;
+  dynLayers.push({
+    id: pctId, type: 'text', vis: true,
+    text: '0%', color: '#00ff88',
+    rainbow: false, x: 18, y: 0,
+    size: 'small', scroll: false, scrollSpeed: 1,
+    _isDonPct: true, _manualPos: true,
+  });
+  setTimeout(() => {
+    const cb = document.getElementById('donShowPct');
+    if(cb) { cb.checked = true; document.getElementById('donPctOptions').style.display = ''; }
+  }, 100);
+
+  // 3. Wide horizontal VU meter — progress bar across middle
+  const vuId = 'vu_' + (++layerIdN);
+  dynLayers.push({
+    id: vuId, type: 'vu', vis: true, vuMode: 'static',
+    orient: 'horizontal', bars: 1,
+    colorMode: 'gradient',
+    monoColor: '#00e5a0',
+    x: 1, y: 7, w: 44, h: 5,
+  });
+  vuStates[vuId] = { levels: [0], peaks: [0], decay: [0] };
+  setTimeout(() => {
+    updateDonVuSelect();
+    const sel = document.getElementById('donVuLink');
+    if(sel) { sel.value = vuId; }
+  }, 100);
+
+  // 4. Mariemont logo — centered below bar
+  const logo = logoPresets[1]; // M Circle
+  const mPixels = [];
+  for(let r = 0; r < logo.h; r++) {
+    mPixels[r] = [];
+    for(let c = 0; c < logo.w; c++) {
+      mPixels[r][c] = decodeLogoPixel(logo, r, c);
+    }
+  }
+  dynLayers.push({
+    id: 'logo_' + (++layerIdN), type: 'image', vis: true,
+    pixels: mPixels, x: 0, y: 0,
+  });
+
+  // 5. Scrolling message at bottom
+  dynLayers.push({
+    id: 'txt_' + (++layerIdN), type: 'text', vis: true,
+    text: 'EVERY PIXEL COUNTS - THANK YOU FOR YOUR SUPPORT!', color: '#ffd60a',
+    rainbow: false, x: 0, y: 15,
+    size: 'medium', scroll: true, scrollSpeed: 0.75,
+  });
+}
+
+// ─── PRESET 3: INTERACTIVE ────────────────────────
+// "Buy a pixel" layout: drawing canvas with borders
+// VU thermometer on left, logo bottom-right
+function buildInteractivePreset() {
+  layers.bg.color = '#0a0a14';
+  document.getElementById('bgColor').value = '#0a0a14';
+
+  // 1. Draw layer — the interactive canvas
+  const drawId = 'draw_' + (++layerIdN);
+  dynLayers.push({
+    id: drawId, type: 'draw', vis: true,
+    name: 'Donor Canvas',
+    data: Array.from({length: ROWS}, () => Array(COLS).fill(null)),
+  });
+  activeDrawLayer = drawId;
+
+  // 2. Border frame using a draw layer
+  const borderId = 'draw_' + (++layerIdN);
+  const borderData = Array.from({length: ROWS}, () => Array(COLS).fill(null));
+  const borderColor = '#1a2244';
+  // Top & bottom borders
+  for(let c = 0; c < COLS; c++) {
+    borderData[0][c] = borderColor;
+    borderData[ROWS-1][c] = borderColor;
+  }
+  // Left border (6 cols for VU) & right border
+  for(let r = 0; r < ROWS; r++) {
+    for(let c = 0; c < 6; c++) borderData[r][c] = borderColor;
+    borderData[r][COLS-1] = borderColor;
+  }
+  dynLayers.push({
+    id: borderId, type: 'draw', vis: true,
+    name: 'Border', data: borderData,
+  });
+
+  // 3. VU thermometer — in the left border zone
+  const vuId = 'vu_' + (++layerIdN);
+  dynLayers.push({
+    id: vuId, type: 'vu', vis: true, vuMode: 'static',
+    orient: 'vertical', bars: 1,
+    colorMode: 'gradient',
+    monoColor: '#00e5a0',
+    x: 1, y: 1, w: 4, h: 21,
+  });
+  vuStates[vuId] = { levels: [0], peaks: [0], decay: [0] };
+  setTimeout(() => {
+    updateDonVuSelect();
+    const sel = document.getElementById('donVuLink');
+    if(sel) { sel.value = vuId; }
+  }, 100);
+
+  // 4. Scrolling invite text at top
+  dynLayers.push({
+    id: 'txt_' + (++layerIdN), type: 'text', vis: true,
+    text: 'BUY A PIXEL! DRAW YOUR MARK!', color: '#ffd60a',
+    rainbow: true, x: 7, y: 1,
+    size: 'small', scroll: true, scrollSpeed: 1,
+  });
+
+  // 5. Percentage — bottom center area
+  const pctId = 'donpct_' + (++layerIdN);
+  donPctLayerId = pctId;
+  dynLayers.push({
+    id: pctId, type: 'text', vis: true,
+    text: '0%', color: '#00e5a0',
+    rainbow: false, x: 20, y: 16,
+    size: 'small', scroll: false, scrollSpeed: 1,
+    _isDonPct: true, _manualPos: true,
+  });
+  setTimeout(() => {
+    const cb = document.getElementById('donShowPct');
+    if(cb) { cb.checked = true; document.getElementById('donPctOptions').style.display = ''; }
+  }, 100);
+}
+
+// ─── PRESET 4: CELEBRATION ────────────────────────
+// Rainbow-heavy, animated, party mode
+// Great for when the goal is reached or for high-energy events
+function buildCelebrationPreset() {
+  layers.bg.color = '#0a000a';
+  document.getElementById('bgColor').value = '#0a000a';
+
+  // 1. Big rainbow scrolling school name
+  dynLayers.push({
+    id: 'txt_' + (++layerIdN), type: 'text', vis: true,
+    text: 'MARIEMONT WARRIORS', color: '#ffffff',
+    rainbow: true, x: 0, y: 1,
+    size: 'large', scroll: true, scrollSpeed: 1.5,
+  });
+
+  // 2. Percentage — center
+  const pctId = 'donpct_' + (++layerIdN);
+  donPctLayerId = pctId;
+  dynLayers.push({
+    id: pctId, type: 'text', vis: true,
+    text: '0%', color: '#ffd60a',
+    rainbow: false, x: 18, y: 11,
+    size: 'large', scroll: false, scrollSpeed: 1,
+    _isDonPct: true, _manualPos: true,
+  });
+  setTimeout(() => {
+    const cb = document.getElementById('donShowPct');
+    if(cb) { cb.checked = true; document.getElementById('donPctOptions').style.display = ''; }
+  }, 100);
+
+  // 3. Horizontal VU bar — near bottom
+  const vuId = 'vu_' + (++layerIdN);
+  dynLayers.push({
+    id: vuId, type: 'vu', vis: true, vuMode: 'static',
+    orient: 'horizontal', bars: 1,
+    colorMode: 'gradient',
+    monoColor: '#ff44aa',
+    x: 0, y: 20, w: 46, h: 3,
+  });
+  vuStates[vuId] = { levels: [0], peaks: [0], decay: [0] };
+  setTimeout(() => {
+    updateDonVuSelect();
+    const sel = document.getElementById('donVuLink');
+    if(sel) { sel.value = vuId; }
+  }, 100);
+
+  // 4. Warrior logo — bottom left
+  const logo = logoPresets[2]; // Warrior
+  const wPixels = [];
+  for(let r = 0; r < logo.h; r++) {
+    wPixels[r] = [];
+    for(let c = 0; c < logo.w; c++) {
+      wPixels[r][c] = decodeLogoPixel(logo, r, c);
+    }
+  }
+
+  // Draw layer for donor art
+  const drawId = 'draw_' + (++layerIdN);
+  dynLayers.push({
+    id: drawId, type: 'draw', vis: true,
+    name: 'Donor Art',
+    data: Array.from({length: ROWS}, () => Array(COLS).fill(null)),
+  });
+  activeDrawLayer = drawId;
+}
+
+// ═══════════════════════════════════════════
+// FULLSCREEN MODE
+// ═══════════════════════════════════════════
+function toggleFullscreen() {
+  const isFs = document.body.classList.toggle('fs');
+  if(isFs) {
+    // Calculate LED size to fill viewport
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const gapPx = 2;
+    const cellW = Math.floor((vw - (COLS-1)*gapPx) / COLS);
+    const cellH = Math.floor((vh - (ROWS-1)*gapPx) / ROWS);
+    const cell = Math.min(cellW, cellH, 40); // cap at 40px
+    document.documentElement.style.setProperty('--fs-cell', cell+'px');
+    document.documentElement.style.setProperty('--fs-gap', gapPx+'px');
+    // Reset zoom
+    document.getElementById('matrixWrap').style.transform = '';
+    zoomLevel = 1;
+  }
+  render();
+}
+
+// ESC exits fullscreen too
+document.addEventListener('keydown', e => {
+  if(e.key==='Escape' && document.body.classList.contains('fs')) {
+    toggleFullscreen();
+  }
+});
+
+// ═══════════════════════════════════════════
+// MOVE / REPOSITION LAYERS
+// ═══════════════════════════════════════════
+function moveLayer(id, dr, dc) {
+  const l = dynLayers.find(l=>l.id===id);
+  if(!l) return;
+  saveUndo();
+  if(l.type==='draw' && l.data) {
+    // Shift pixel data within grid
+    const newData = Array.from({length:ROWS}, ()=>Array(COLS).fill(null));
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) {
+      const nr=r+dr, nc=c+dc;
+      if(nr>=0&&nr<ROWS&&nc>=0&&nc<COLS) newData[nr][nc]=l.data[r][c];
+    }
+    l.data=newData;
+  } else {
+    // Positional layers: just shift x,y
+    if(l.x!=null) l.x += dc;
+    if(l.y!=null) l.y += dr;
+  }
+  render();
+}
+
+// ═══════════════════════════════════════════
+// PRESET SCENES
+// ═══════════════════════════════════════════
+const NUM_SCENES = 6;
+const NUM_SHARED_SCENES = 3;
+const sharedScenes = [null, null, null]; // cached from ESP32
+
+function initSceneUI() {
+  // ── Local scenes ──
+  const slots = document.getElementById('sceneSlots');
+  const sel = document.getElementById('sceneTarget');
+  slots.innerHTML = '';
+  sel.innerHTML = '';
+  for(let i=1;i<=NUM_SCENES;i++) {
+    const key = 'ledScene_'+i;
+    const saved = localStorage.getItem(key);
+    const name = saved ? JSON.parse(saved).name || ('Scene '+i) : null;
+
+    // Slot button
+    const row = document.createElement('div');
+    row.style.cssText='display:flex;gap:4px;align-items:center;';
+    row.innerHTML = name
+      ? `<button class="btn" onclick="loadScene(${i})" style="flex:1;text-align:left;font-size:10px">▶ <b>Slot ${i}:</b> ${name}</button><button class="btn btn-sm" onclick="deleteScene(${i})" title="Delete" style="color:var(--danger)">✕</button>`
+      : `<button class="btn" disabled style="flex:1;text-align:left;font-size:10px;opacity:0.4">Slot ${i}: Empty</button>`;
+    slots.appendChild(row);
+
+    // Selector option
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = 'Slot '+i+(name?' ('+name+')':' (empty)');
+    sel.appendChild(opt);
+  }
+
+  // ── Shared scenes ──
+  const sharedSlots = document.getElementById('sharedSceneSlots');
+  const sharedSel = document.getElementById('sharedSceneTarget');
+  sharedSlots.innerHTML = '';
+  sharedSel.innerHTML = '';
+  for(let i=0;i<NUM_SHARED_SCENES;i++) {
+    const scene = sharedScenes[i];
+    const name = scene ? scene.name : null;
+
+    const row = document.createElement('div');
+    row.style.cssText='display:flex;gap:4px;align-items:center;';
+    row.innerHTML = name
+      ? `<button class="btn" onclick="loadSharedScene(${i})" style="flex:1;text-align:left;font-size:10px">▶ <b>Shared ${i+1}:</b> ${name}</button><button class="btn btn-sm" onclick="deleteSharedScene(${i})" title="Delete" style="color:var(--danger)">✕</button>`
+      : `<button class="btn" disabled style="flex:1;text-align:left;font-size:10px;opacity:0.4">Shared ${i+1}: Empty</button>`;
+    sharedSlots.appendChild(row);
+
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = 'Shared '+(i+1)+(name?' ('+name+')':' (empty)');
+    sharedSel.appendChild(opt);
+  }
+}
+
+function saveScene() {
+  const slot = parseInt(document.getElementById('sceneTarget').value);
+  const name = prompt('Scene name:', 'Scene '+slot);
+  if(!name) return;
+
+  const snap = snapshotState();
+  const data = {
+    name: name,
+    layers: snap.layers,
+    vu: snap.vu,
+    activeDraw: snap.activeDraw,
+    bg: layers.bg.color
+  };
+  localStorage.setItem('ledScene_'+slot, JSON.stringify(data));
+  initSceneUI();
+}
+
+function loadScene(slot) {
+  const raw = localStorage.getItem('ledScene_'+slot);
+  if(!raw) return;
+  const data = JSON.parse(raw);
+  saveUndo();
+
+  // Restore background
+  if(data.bg !== undefined) {
+    layers.bg.color = data.bg;
+    document.getElementById('bgColor').value = data.bg || '#000000';
+  }
+
+  // Restore layers + VU via restoreState
+  restoreState({layers:data.layers||[], vu:data.vu||{}, activeDraw:data.activeDraw});
+}
+
+function deleteScene(slot) {
+  localStorage.removeItem('ledScene_'+slot);
+  initSceneUI();
+}
+
+// ── Shared Scenes (ESP32-synced via REST API) ──
+
+function saveSharedScene() {
+  const slot = parseInt(document.getElementById('sharedSceneTarget').value);
+  const name = prompt('Scene name:', 'Shared '+(slot+1));
+  if(!name) return;
+
+  const snap = snapshotState();
+  const data = {
+    name: name,
+    layers: snap.layers,
+    vu: snap.vu,
+    activeDraw: snap.activeDraw,
+    bg: layers.bg.color
+  };
+
+  const host = location.hostname || '192.168.4.1';
+  const port = location.port || '80';
+  fetch('http://'+host+':'+port+'/api/scene/'+slot, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(data)
+  }).then(r => {
+    if(r.ok) {
+      sharedScenes[slot] = data;
+      initSceneUI();
+    } else {
+      alert('Failed to save shared scene');
+    }
+  }).catch(() => alert('Not connected to ESP32'));
+}
+
+function loadSharedScene(slot) {
+  const scene = sharedScenes[slot];
+  if(!scene) return;
+  saveUndo();
+
+  if(scene.bg !== undefined) {
+    layers.bg.color = scene.bg;
+    document.getElementById('bgColor').value = scene.bg || '#000000';
+  }
+  restoreState({layers:scene.layers||[], vu:scene.vu||{}, activeDraw:scene.activeDraw});
+}
+
+function deleteSharedScene(slot) {
+  const host = location.hostname || '192.168.4.1';
+  const port = location.port || '80';
+  fetch('http://'+host+':'+port+'/api/scene/'+slot, { method: 'DELETE' })
+    .then(() => {
+      sharedScenes[slot] = null;
+      initSceneUI();
+    }).catch(() => alert('Not connected to ESP32'));
+}
+
+function requestSharedScenes() {
+  // Fetch each scene slot via REST
+  const host = location.hostname || '192.168.4.1';
+  const port = location.port || '80';
+  let loaded = 0;
+  for(let i = 0; i < NUM_SHARED_SCENES; i++) {
+    fetch('http://'+host+':'+port+'/api/scene/'+i)
+      .then(r => {
+        if(r.ok) return r.json();
+        else throw 'empty';
+      })
+      .then(data => { sharedScenes[i] = data; })
+      .catch(() => { sharedScenes[i] = null; })
+      .finally(() => { loaded++; if(loaded >= NUM_SHARED_SCENES) initSceneUI(); });
+  }
+}
+
+function handleSceneMessage(msg) {
+  // WebSocket scene_list just tells us which slots have data
+  // We then fetch actual data via REST
+  if(msg === 'scene_list_done') {
+    requestSharedScenes();
+  }
+}
+
+// ── Export / Import All Presets ──
+
+function exportAllPresets() {
+  const presets = {};
+  for(let i=1;i<=NUM_SCENES;i++) {
+    const raw = localStorage.getItem('ledScene_'+i);
+    if(raw) presets['slot_'+i] = JSON.parse(raw);
+  }
+  // Include shared scenes if we have them cached
+  for(let i=0;i<NUM_SHARED_SCENES;i++) {
+    if(sharedScenes[i]) presets['shared_'+i] = sharedScenes[i];
+  }
+
+  if(Object.keys(presets).length === 0) {
+    alert('No saved presets to export');
+    return;
+  }
+
+  const blob = new Blob([JSON.stringify(presets, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'led-matrix-presets.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function importAllPresets(e) {
+  const file = e.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      const presets = JSON.parse(ev.target.result);
+      let count = 0;
+      for(const key in presets) {
+        if(key.startsWith('slot_')) {
+          const slot = parseInt(key.split('_')[1]);
+          if(slot >= 1 && slot <= NUM_SCENES) {
+            localStorage.setItem('ledScene_'+slot, JSON.stringify(presets[key]));
+            count++;
+          }
+        }
+        if(key.startsWith('shared_')) {
+          const slot = parseInt(key.split('_')[1]);
+          if(slot >= 0 && slot < NUM_SHARED_SCENES) {
+            const host = location.hostname || '192.168.4.1';
+            const port = location.port || '80';
+            fetch('http://'+host+':'+port+'/api/scene/'+slot, {
+              method: 'POST',
+              headers: {'Content-Type':'application/json'},
+              body: JSON.stringify(presets[key])
+            }).catch(()=>{});
+            sharedScenes[slot] = presets[key];
+            count++;
+          }
+        }
+      }
+      initSceneUI();
+      alert('Imported ' + count + ' preset(s)');
+    } catch(err) {
+      alert('Invalid preset file');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+// Init on load
+initSceneUI();
+
+// ═══════════════════════════════════════════
+// STENCIL MODE
+// ═══════════════════════════════════════════
+
+function refreshStencilUI() {
+  const container = document.getElementById('stencilLayers');
+  if(!container) return;
+  container.innerHTML = '';
+
+  dynLayers.forEach(l => {
+    if(l.type==='vu') return;
+    const row = document.createElement('div');
+    row.className = 'stencil-row' + (l.stencil ? ' active' : '');
+
+    let icon = '🖌', name = l.id;
+    if(l.type==='draw') { icon='🖌'; name=l.name||l.id; }
+    else if(l.type==='text') { icon='✎'; name='"'+l.text.substring(0,14)+'"'; }
+    else if(l.type==='image') { icon='🖼'; name='Image'; }
+    else if(l.type==='bitmap') { icon='⬡'; name=l.bmpName||'Bitmap'; }
+    else if(l.type==='logo') { icon='🏫'; name=l.logoName||'Logo'; }
+
+    row.innerHTML = `
+      <label>
+        <input type="checkbox" ${l.stencil?'checked':''} onchange="toggleStencil('${l.id}',this.checked)">
+        <span>${icon}</span>
+        <span class="st-name">${name}</span>
+      </label>
+      <span class="st-swatch" style="background:${l.stencil?'#ffffff':(l.color||'var(--accent)')}"></span>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function toggleStencil(id, on) {
+  const l = dynLayers.find(l=>l.id===id);
+  if(l) { l.stencil = on; render(); refreshStencilUI(); }
+}
+
+function stencilAll(on) {
+  dynLayers.forEach(l => { if(l.type!=='vu') l.stencil = on; });
+  render();
+  refreshStencilUI();
+}
+
+// ═══════════════════════════════════════════
+// PINCH-TO-ZOOM
+// ═══════════════════════════════════════════
+let zoomLevel = 1;
+let lastPinchDist = 0;
+
+document.getElementById('mainArea').addEventListener('touchstart', function(e) {
+  if(e.touches.length===2) {
+    lastPinchDist = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+  }
+}, {passive:true});
+
+document.getElementById('mainArea').addEventListener('touchmove', function(e) {
+  if(e.touches.length===2) {
+    e.preventDefault();
+    const dist = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+    if(lastPinchDist > 0) {
+      const delta = dist / lastPinchDist;
+      zoomLevel = Math.max(0.5, Math.min(3, zoomLevel * delta));
+      document.getElementById('matrixWrap').style.transform = 'scale('+zoomLevel+')';
+    }
+    lastPinchDist = dist;
+  }
+}, {passive:false});
+
+document.getElementById('mainArea').addEventListener('touchend', function(e) {
+  if(e.touches.length<2) lastPinchDist=0;
+}, {passive:true});
+
+// ═══════════════════════════════════════════
+// LITE BRITE MODE
+// ═══════════════════════════════════════════
+let liteBriteMode = false;
+const LB_COLORS = ['#ff0000','#ff8800','#ffdd00','#00cc00','#0066ff','#cc00cc','#ffffff'];
+
+function toggleLiteBrite() {
+  liteBriteMode = !liteBriteMode;
+  const btn = document.getElementById('lbBtn');
+  btn.classList.toggle('on', liteBriteMode);
+
+  document.getElementById('normalColorRow').style.display = liteBriteMode ? 'none' : '';
+  document.getElementById('lbColorRow').style.display = liteBriteMode ? '' : 'none';
+
+  if(liteBriteMode) {
+    // Restrict to draw/erase/fill only, default to draw
+    const allowed = ['draw','erase','fill'];
+    if(!allowed.includes(tool)) {
+      const drawBtn = document.querySelector('#toolBtns .btn');
+      setTool('draw', drawBtn);
+    }
+    // Snap current color to nearest Lite Brite color
+    const current = document.getElementById('brushColor').value;
+    const nearest = nearestLbColor(current);
+    document.getElementById('brushColor').value = nearest;
+    // Highlight the matching LB swatch
+    document.querySelectorAll('.lb-sw').forEach(s => s.classList.toggle('on', s.style.background === nearest || rgbStyleToHex(s.style.backgroundColor) === nearest));
+  }
+}
+
+function pickLb(hex, el) {
+  document.getElementById('brushColor').value = hex;
+  document.querySelectorAll('.lb-sw').forEach(s => s.classList.remove('on'));
+  el.classList.add('on');
+}
+
+function nearestLbColor(hex) {
+  const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+  let best=LB_COLORS[0], bestDist=Infinity;
+  LB_COLORS.forEach(c => {
+    const cr=parseInt(c.slice(1,3),16), cg=parseInt(c.slice(3,5),16), cb=parseInt(c.slice(5,7),16);
+    const d=(r-cr)**2+(g-cg)**2+(b-cb)**2;
+    if(d<bestDist){bestDist=d;best=c;}
+  });
+  return best;
+}
+
+function rgbStyleToHex(rgb) {
+  if(!rgb) return '';
+  const m=rgb.match(/(\d+)/g);
+  if(!m||m.length<3) return '';
+  return '#'+m.slice(0,3).map(x=>(+x).toString(16).padStart(2,'0')).join('');
+}
+
+// Override getColor to enforce Lite Brite palette
+const _origGetColor = function(){ return document.getElementById('brushColor').value; };
+function getColor() {
+  const c = document.getElementById('brushColor').value;
+  if(liteBriteMode) return nearestLbColor(c);
+  return c;
+}
+
+// ═══════════════════════════════════════════
+// KEYBOARD SHORTCUTS
+// ═══════════════════════════════════════════
+document.addEventListener('keydown', function(e) {
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.tagName==='TEXTAREA') return;
+  if(e.key==='Escape') { cancelPlace(); return; }
+  if((e.ctrlKey||e.metaKey) && e.key==='z') { e.preventDefault(); undo(); return; }
+  if((e.ctrlKey||e.metaKey) && (e.key==='y'||(e.shiftKey&&e.key==='z'))) { e.preventDefault(); redo(); return; }
+  if(e.key===' ' && !e.ctrlKey) { e.preventDefault(); pushToDisplay(); return; }
+});
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+addDrawLayer(); // Create the first draw layer
+render();
+connectWS();
+</script>
+</body>
+</html>
